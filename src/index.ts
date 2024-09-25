@@ -55,6 +55,7 @@ function pollAirtable() {
 
 // welcomes new users
 app.event('team_join', async ({ event, client }) => {
+    return; // don't actually do this for now
     await client.chat.postMessage({
         channel: event.user.id,
         text: process.env.SLACK_WELCOME_MESSAGE
@@ -98,7 +99,10 @@ app.event('team_join', async ({ event, client }) => {
     });
 
 });
-
+// TODO:
+// - test team_join event
+// - actually poll airtable
+// - implement user invitation and promotion
 
 // Start the app
 (async () => {
