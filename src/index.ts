@@ -1,14 +1,26 @@
 import { App } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
-import { AirtablePlus } from 'airtable-plus';
-require('dotenv').config();
+import AirtablePlus from 'airtable-plus';
+import { inviteSlackUser } from './inviteToSlack';
+import { join } from 'path';
 
-const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", 
-    "AIRTABLE_BASE_ID", "AIRTABLE_API_KEY", "AIRTABLE_TABLE_NAME", 
-    "AIRTABLE_INVITE_REQUESTED_FIELD_NAME", "AIRTABLE_INVITE_SENT_FIELD_NAME", 
-    "AIRTABLE_GRADUATED_FIELD_NAME", "AIRTABLE_PROMOTED_FIELD_NAME", 
-    "AIRTABLE_EMAIL_FIELD_NAME", "AIRTABLE_SLACK_ID_FIELD_NAME",
-    "AIRTABLE_HAS_SIGNED_IN_FIELD_NAME",
+if (!process.env["NODE_ENV"] || process.env["NODE_ENV"] !== "production") {
+require('dotenv').config();
+}
+
+const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
+    "SLACK_BROWSER_TOKEN", "SLACK_COOKIE",
+    "AIRTABLE_API_KEY", "AIRTABLE_HS_BASE_ID", "AIRTABLE_HS_TABLE_NAME", 
+    "AIRTABLE_HS_INVITE_REQUESTED_FIELD_NAME", "AIRTABLE_HS_INVITE_SENT_FIELD_NAME", 
+    "AIRTABLE_HS_ACADEMY_COMPLETED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME", 
+    "AIRTABLE_HS_EMAIL_FIELD_NAME", "AIRTABLE_HS_SLACK_ID_FIELD_NAME",
+    "AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME",
+    "AIRTABLE_HS_FIRST_NAME_FIELD_NAME", "AIRTABLE_HS_LAST_NAME_FIELD_NAME",
+    "AIRTABLE_HS_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_BASE_ID",
+    "AIRTABLE_JR_TABLE_NAME", "AIRTABLE_JR_EMAIL_FIELD_NAME",
+    "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITALBE_FIELD_NAME",
+    "AIRTABLE_JR_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_FIRST_NAME_FIELD_NAME",
+    "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
     "SLACK_WELCOME_MESSAGE", "SLACK_LOGGING_CHANNEL"];
 const missingEnvVars = envVarsUsed.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
@@ -23,47 +35,94 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN, // App-level token for socket mode
 });
 
-const airtable = new AirtablePlus({
-    baseID: process.env.AIRTABLE_BASE_ID!,
+const high_seas_airtable = new AirtablePlus({
+    baseID: process.env.AIRTABLE_HS_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
-    tableName: process.env.AIRTABLE_TABLE_NAME!
+    tableName: process.env.AIRTABLE_HS_TABLE_NAME!
     });
 
-function pollAirtable() {
-    console.log('Polling airtable');
-    airtable.read({
-        filterByFormula: `AND({${process.env.AIRTABLE_INVITE_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_INVITE_SENT_FIELD_NAME}})`,
-        maxRecords: 1,
-        sort: [{field: 'createdTime', direction: 'asc'}]
-    }).then(records => {
-        if (records.length > 0) {
-            console.log('Inviting new user');
-            // invite new user
-        }
+const join_requests_airtable = new AirtablePlus({
+    baseID: process.env.AIRTABLE_JR_BASE_ID!,
+    apiKey: process.env.AIRTABLE_API_KEY!,
+    tableName: process.env.AIRTABLE_JR_TABLE_NAME!
     });
-    airtable.read({
-        filterByFormula: `AND({${process.env.AIRTABLE_GRADUATED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_PROMOTED_FIELD_NAME}})`,
-        maxRecords: 1,
-        sort: [{field: 'createdTime', direction: 'asc'}]
-    }).then(records => {
-        if (records.length > 0) {
+
+async function pollAirtable() {
+    console.log('Polling airtable');
+
+    try {
+        const joinRequestsRecords = await join_requests_airtable.read({
+            filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITALBE_FIELD_NAME}}))`,
+            maxRecords: 1,
+        });
+
+        if (joinRequestsRecords.length > 0) {
+            console.log('Inviting user');
+            // invite user
+            await handleJoinRequest(joinRequestsRecords[0]);
+        }
+    } catch (error) {
+        console.error('Error reading join requests airtable:', error);
+    }
+
+    try {
+        const highSeasRecords = await high_seas_airtable.read({
+            filterByFormula: `AND({${process.env.AIRTABLE_HS_ACADEMY_COMPLETED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}))`,
+            maxRecords: 1,
+        });
+
+        if (highSeasRecords.length > 0) {
             console.log('Promoting user');
             // promote user
         }
+    } catch (error) {
+        console.error('Error reading high seas airtable:', error);
+    }
+}
+
+async function handleJoinRequest(joinRequestRecord) {
+    // invite user to slack
+    console.log('Inviting user to Slack');
+    const email = joinRequestRecord.fields[process.env.AIRTABLE_JR_EMAIL_FIELD_NAME];
+
+    const result = await inviteSlackUser({email});
+    console.log('Result of inviting user to Slack');
+    console.log(result);
+    if (!result.ok) {
+        console.error(`Error inviting user ${email} to Slack`);
+        join_requests_airtable.update(joinRequestRecord.id, {
+            [process.env.AIRTABLE_JR_UNINVITALBE_FIELD_NAME]: true
+        });
+        return;
+    }
+    // update Join Requests record
+    join_requests_airtable.update(joinRequestRecord.id, {
+        [process.env.AIRTABLE_JR_INVITED_FIELD_NAME]: true
+    });
+    // carry new info into High Seas record
+    const firstName = joinRequestRecord.fields[process.env.AIRTABLE_JR_FIRST_NAME_FIELD_NAME];
+    const lastName = joinRequestRecord.fields[process.env.AIRTABLE_JR_LAST_NAME_FIELD_NAME];
+    const ipAddress = joinRequestRecord.fields[process.env.AIRTABLE_JR_IP_ADDRESS_FIELD_NAME];
+    await high_seas_airtable.create({
+        [process.env.AIRTABLE_HS_EMAIL_FIELD_NAME]: email,
+        [process.env.AIRTABLE_HS_FIRST_NAME_FIELD_NAME]: firstName,
+        [process.env.AIRTABLE_HS_LAST_NAME_FIELD_NAME]: lastName,
+        [process.env.AIRTABLE_HS_IP_ADDRESS_FIELD_NAME]: ipAddress,
+        [process.env.AIRTABLE_HS_INVITE_REQUESTED_FIELD_NAME]: true,
+        [process.env.AIRTABLE_HS_INVITE_SENT_FIELD_NAME]: true
     });
 }
 
 // welcomes new users
 app.event('team_join', async ({ event, client }) => {
-    return; // don't actually do this for now
-    await client.chat.postMessage({
-        channel: event.user.id,
-        text: process.env.SLACK_WELCOME_MESSAGE
-    });
+    console.log("New member joined!")
     // find airtable record by email and update it w/ slack id
-    const email = event.user.profile.email;
+    const userInfo = await client.users.info({ user: event.user.id });
+    console.log(`User info: ${JSON.stringify(userInfo, null, 2)}`);
+    const email = userInfo.user.profile.email;
+    console.log(`Email: ${email}`);
     if (!email) {
-        const errorString = `ERROR: When welcoming user, no email found for user <@${event.user.id}>`;
+        const errorString = `ERROR: When welcoming user, no email found for user <@${event.user.id}>. Event: ${JSON.stringify(event, null, 2)}`;
         console.error(errorString);
         await client.chat.postMessage({
             channel: process.env.SLACK_LOGGING_CHANNEL,
@@ -71,9 +130,10 @@ app.event('team_join', async ({ event, client }) => {
         });
         return;
     }
-    const userRecords = await airtable.read({
-        filterByFormula: `{${process.env.AIRTABLE_EMAIL_FIELD_NAME}} = '${email}'`
+    const userRecords = await high_seas_airtable.read({
+        filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`
     });
+    console.log(`Got ${userRecords.length} records`);
     if (userRecords.length === 0) {
         const errorString = `ERROR: When welcoming user, no airtable record found for user <@${event.user.id}> with email ${email}`;
         console.error(errorString);
@@ -93,23 +153,31 @@ app.event('team_join', async ({ event, client }) => {
         return;
     }
     const userRecord = userRecords[0];
-    await airtable.update(userRecord.id, {
-        [process.env.AIRTABLE_SLACK_ID_FIELD_NAME]: event.user.id,
-        [process.env.AIRTABLE_HAS_SIGNED_IN]: true // those square brackets are ES6 computed property names
+    console.log(`User record: ${JSON.stringify(userRecord)}`);
+    await high_seas_airtable.update(userRecord.id, {
+        [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
+        [process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME]: true // those square brackets are ES6 computed property names
+    });
+    console.log(`Updated user record with slack id ${event.user.id}`);
+    // send welcome message
+    await client.chat.postMessage({
+        channel: event.user.id,
+        text: process.env.SLACK_WELCOME_MESSAGE
     });
 
 });
 // TODO:
-// - test team_join event
-// - actually poll airtable
-// - implement user invitation and promotion
+// - add server
+// - add promotion
 
 // Start the app
 (async () => {
-  await app.start();
-  console.log('⚡️ Bolt app is running!');
-  await app.client.chat.postMessage({
-    channel: process.env.SLACK_LOGGING_CHANNEL,
-    text: 'INFO: Bot has just started!'
-  });
+    await app.start();
+    console.log('⚡️ Bolt app is running!');
+    await app.client.chat.postMessage({
+        channel: process.env.SLACK_LOGGING_CHANNEL,
+        text: 'INFO: Bot has just started!'
+    });
+    // poll airtable every 30 seconds
+    setInterval(pollAirtable, 30000);
 })();
