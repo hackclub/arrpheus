@@ -2,7 +2,7 @@ import { App } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
 import AirtablePlus from 'airtable-plus';
 import { inviteSlackUser } from './inviteToSlack';
-import { join } from 'path';
+import http from 'http';
 
 if (!process.env["NODE_ENV"] || process.env["NODE_ENV"] !== "production") {
 require('dotenv').config();
@@ -14,14 +14,15 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_HS_INVITE_REQUESTED_FIELD_NAME", "AIRTABLE_HS_INVITE_SENT_FIELD_NAME", 
     "AIRTABLE_HS_ACADEMY_COMPLETED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME", 
     "AIRTABLE_HS_EMAIL_FIELD_NAME", "AIRTABLE_HS_SLACK_ID_FIELD_NAME",
-    "AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME",
+    "AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME", "AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME",
     "AIRTABLE_HS_FIRST_NAME_FIELD_NAME", "AIRTABLE_HS_LAST_NAME_FIELD_NAME",
     "AIRTABLE_HS_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_BASE_ID",
     "AIRTABLE_JR_TABLE_NAME", "AIRTABLE_JR_EMAIL_FIELD_NAME",
-    "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITALBE_FIELD_NAME",
+    "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITABLE_FIELD_NAME",
     "AIRTABLE_JR_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_FIRST_NAME_FIELD_NAME",
     "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
-    "SLACK_WELCOME_MESSAGE", "SLACK_LOGGING_CHANNEL"];
+    "SLACK_WELCOME_MESSAGE", "SLACK_LOGGING_CHANNEL",
+    "PORT"];
 const missingEnvVars = envVarsUsed.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
     console.error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
@@ -52,7 +53,7 @@ async function pollAirtable() {
 
     try {
         const joinRequestsRecords = await join_requests_airtable.read({
-            filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITALBE_FIELD_NAME}}))`,
+            filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}))`,
             maxRecords: 1,
         });
 
@@ -91,9 +92,9 @@ async function handleJoinRequest(joinRequestRecord) {
     if (!result.ok) {
         console.error(`Error inviting user ${email} to Slack`);
         join_requests_airtable.update(joinRequestRecord.id, {
-            [process.env.AIRTABLE_JR_UNINVITALBE_FIELD_NAME]: true
+            [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true
         });
-        return;
+        return result;
     }
     // update Join Requests record
     join_requests_airtable.update(joinRequestRecord.id, {
@@ -111,6 +112,7 @@ async function handleJoinRequest(joinRequestRecord) {
         [process.env.AIRTABLE_HS_INVITE_REQUESTED_FIELD_NAME]: true,
         [process.env.AIRTABLE_HS_INVITE_SENT_FIELD_NAME]: true
     });
+    return result;
 }
 
 // welcomes new users
@@ -122,7 +124,7 @@ app.event('team_join', async ({ event, client }) => {
     const email = userInfo.user.profile.email;
     console.log(`Email: ${email}`);
     if (!email) {
-        const errorString = `ERROR: When welcoming user, no email found for user <@${event.user.id}>. Event: ${JSON.stringify(event, null, 2)}`;
+        const errorString = `ERROR: When welcoming user, no email found for user <@${event.user.id}>. Event: ${JSON.stringify(event, null, 2)}, User info: ${JSON.stringify(userInfo, null, 2)}`;
         console.error(errorString);
         await client.chat.postMessage({
             channel: process.env.SLACK_LOGGING_CHANNEL,
@@ -156,6 +158,7 @@ app.event('team_join', async ({ event, client }) => {
     console.log(`User record: ${JSON.stringify(userRecord)}`);
     await high_seas_airtable.update(userRecord.id, {
         [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
+        [process.env.AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME]: true,
         [process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME]: true // those square brackets are ES6 computed property names
     });
     console.log(`Updated user record with slack id ${event.user.id}`);
@@ -170,6 +173,45 @@ app.event('team_join', async ({ event, client }) => {
 // - add server
 // - add promotion
 
+const server = http.createServer();
+server.on('request', async (req, res) => {
+    console.log(`Got request: ${req.method} ${req.url}`);
+    // check if the request is a POST to /invite-user
+    if (req.method === 'POST' && req.url === '/invite-user') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            const data = JSON.parse(body);
+            console.log('Data:', data);
+            const userEmail = data.email;
+            const userRecord = await join_requests_airtable.read({
+                filterByFormula: `{${process.env.AIRTABLE_JR_EMAIL_FIELD_NAME}} = '${userEmail}'`,
+                maxRecords: 1,
+                sort: [{field: 'autonumber', direction: 'desc'}]
+            });
+            if (userRecord.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('User not found in Airtable');
+                return;
+            }
+            const result = await handleJoinRequest(userRecord[0]);
+            if (result.ok) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+            } else {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+            }
+        });
+    } else {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Requests only POST to /invite-user');
+    }
+});
+
+
 // Start the app
 (async () => {
     await app.start();
@@ -178,6 +220,8 @@ app.event('team_join', async ({ event, client }) => {
         channel: process.env.SLACK_LOGGING_CHANNEL,
         text: 'INFO: Bot has just started!'
     });
+    server.listen(process.env.PORT);
+    console.log(`Server listening on port ${process.env.PORT}`);
     // poll airtable every 30 seconds
     setInterval(pollAirtable, 30000);
 })();

@@ -72,6 +72,6 @@ export async function inviteSlackUser({ email }) {
 
     } catch (e) {
         blog(`Error in inviteSlackUser: ${e}`, "error");
-        return { ok: false, error: e };
+        return { ok: false, error: e.message };
     }
 }

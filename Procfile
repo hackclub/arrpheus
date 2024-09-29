@@ -1,1 +1,1 @@
-watcher: npm start
+web: npm start
