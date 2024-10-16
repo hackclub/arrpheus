@@ -1,7 +1,7 @@
 import { App } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
 import AirtablePlus from 'airtable-plus';
-import { inviteSlackUser } from './inviteToSlack';
+import { inviteSlackUser, upgradeUser } from './undocumentedSlack';
 import http from 'http';
 
 if (!process.env["NODE_ENV"] || process.env["NODE_ENV"] !== "production") {
@@ -12,7 +12,7 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "SLACK_BROWSER_TOKEN", "SLACK_COOKIE",
     "AIRTABLE_API_KEY", "AIRTABLE_HS_BASE_ID", "AIRTABLE_HS_TABLE_NAME", 
     "AIRTABLE_HS_INVITE_REQUESTED_FIELD_NAME", "AIRTABLE_HS_INVITE_SENT_FIELD_NAME", 
-    "AIRTABLE_HS_ACADEMY_COMPLETED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME", 
+    "AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME", 
     "AIRTABLE_HS_EMAIL_FIELD_NAME", "AIRTABLE_HS_SLACK_ID_FIELD_NAME",
     "AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME", "AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME",
     "AIRTABLE_HS_FIRST_NAME_FIELD_NAME", "AIRTABLE_HS_LAST_NAME_FIELD_NAME",
@@ -68,13 +68,18 @@ async function pollAirtable() {
 
     try {
         const highSeasRecords = await high_seas_airtable.read({
-            filterByFormula: `AND({${process.env.AIRTABLE_HS_ACADEMY_COMPLETED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}))`,
+            filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}))`,
             maxRecords: 1,
         });
 
         if (highSeasRecords.length > 0) {
             console.log('Promoting user');
-            // promote user
+            const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]);
+            if (result.ok) {
+                await high_seas_airtable.update(highSeasRecords[0].id, {
+                    [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
+                });
+            }
         }
     } catch (error) {
         console.error('Error reading high seas airtable:', error);
@@ -169,9 +174,6 @@ app.event('team_join', async ({ event, client }) => {
     });
 
 });
-// TODO:
-// - add server
-// - add promotion
 
 const server = http.createServer();
 server.on('request', async (req, res) => {
@@ -184,7 +186,7 @@ server.on('request', async (req, res) => {
         });
         req.on('end', async () => {
             const data = JSON.parse(body);
-            console.log('Data:', data);
+            console.log('Invite user data:', data);
             const userEmail = data.email;
             const userRecord = await join_requests_airtable.read({
                 filterByFormula: `{${process.env.AIRTABLE_JR_EMAIL_FIELD_NAME}} = '${userEmail}'`,
@@ -198,6 +200,37 @@ server.on('request', async (req, res) => {
             }
             const result = await handleJoinRequest(userRecord[0]);
             if (result.ok) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+            } else {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+            }
+        });
+    } else if (req.method === 'POST' && req.url === '/upgrade-user') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            const data = JSON.parse(body);
+            console.log('Upgrade user data:', data);
+            const userSlackId = data.slack_id;
+            const userRecord = await high_seas_airtable.read({
+                filterByFormula: `{${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${userSlackId}'`,
+                maxRecords: 1,
+                sort: [{field: 'autonumber', direction: 'desc'}]
+            });
+            if (userRecord.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('User not found in Airtable');
+                return;
+            }
+            const result = await upgradeUser(app.client, userSlackId);
+            if (result.ok) {
+                await high_seas_airtable.update(userRecord[0].id, {
+                    [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
+                });
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
             } else {
