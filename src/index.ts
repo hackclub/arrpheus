@@ -185,7 +185,15 @@ server.on('request', async (req, res) => {
             body += chunk.toString();
         });
         req.on('end', async () => {
-            const data = JSON.parse(body);
+            let data;
+            try {
+                data = JSON.parse(body);
+            }
+            catch (error) {
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Invalid JSON');
+                return;
+            }
             console.log('Invite user data:', data);
             const userEmail = data.email;
             const userRecord = await join_requests_airtable.read({
@@ -213,7 +221,15 @@ server.on('request', async (req, res) => {
             body += chunk.toString();
         });
         req.on('end', async () => {
-            const data = JSON.parse(body);
+            let data;
+            try {
+                data = JSON.parse(body);
+            }
+            catch (error) {
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Invalid JSON');
+                return;
+            }
             console.log('Upgrade user data:', data);
             const userSlackId = data.slack_id;
             const userRecord = await high_seas_airtable.read({

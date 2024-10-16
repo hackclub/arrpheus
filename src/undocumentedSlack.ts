@@ -85,7 +85,7 @@ export async function upgradeUser(client, user) {
     !userProfile.user.is_ultra_restricted
   ) {
     console.log(`User ${user} is already a full user– skipping`)
-    return null
+    return { ok: false, error: 'User is already a full user' }
   }
   const startPerf = Date.now()
   console.log(`Attempting to upgrade user ${user}`)
