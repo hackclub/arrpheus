@@ -21,8 +21,13 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITABLE_FIELD_NAME",
     "AIRTABLE_JR_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_FIRST_NAME_FIELD_NAME",
     "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
+    "AIRTABLE_MR_TABLE_NAME", "AIRTABLE_MR_REQUESTER_FIELD_NAME",
+    "AIRTABLE_MR_TARGET_FIELD_NAME", "AIRTABLE_MR_MSG_TEXT_FIELD_NAME",
+    "AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME", "AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME",
+    "AIRTABLE_MR_SEND_FAILURE_FIELD_NAME", "AIRTABLE_MR_FAILURE_REASON_FIELD_NAME",
+    "AIRTABLE_MR_AUTONUMBER_FIELD_NAME",
     "SLACK_WELCOME_MESSAGE", "SLACK_LOGGING_CHANNEL",
-    "PORT"];
+    "PORT", "AIRTABLE_POLLING_RATE_MS"];
 const missingEnvVars = envVarsUsed.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
     console.error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
@@ -42,6 +47,12 @@ const high_seas_airtable = new AirtablePlus({
     tableName: process.env.AIRTABLE_HS_TABLE_NAME!
     });
 
+const message_requests_airtable = new AirtablePlus({
+    baseID: process.env.AIRTABLE_HS_BASE_ID!,
+    apiKey: process.env.AIRTABLE_API_KEY!,
+    tableName: process.env.AIRTABLE_MR_TABLE_NAME!
+    });
+
 const join_requests_airtable = new AirtablePlus({
     baseID: process.env.AIRTABLE_JR_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
@@ -50,6 +61,28 @@ const join_requests_airtable = new AirtablePlus({
 
 async function pollAirtable() {
     console.log('Polling airtable');
+    let messageRequests = undefined;
+    try {
+         messageRequests = await message_requests_airtable.read({
+            filterByFormula: `AND(NOT({${process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME}}), NOT({${process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME}}))`,
+            maxRecords: 5,
+            sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}]
+        });
+    } catch (error) {
+        console.error('Error reading message requests airtable:', error);
+        app.client.chat.postMessage({
+            channel: process.env.SLACK_LOGGING_CHANNEL,
+            text: `ERROR: Error reading message requests airtable: ${error}`
+        });
+    }
+
+    if (messageRequests && messageRequests.length > 0){
+        for (const messageRequest of messageRequests) {
+            await sendMessage(messageRequest);
+        }
+    }
+    console.log(`all ${messageRequests ? 0 : messageRequests.length} messages handled.`)
+    return; // for testing: only handle message requests for now
 
     try {
         const joinRequestsRecords = await join_requests_airtable.read({
@@ -84,6 +117,78 @@ async function pollAirtable() {
     } catch (error) {
         console.error('Error reading high seas airtable:', error);
     }
+}
+
+async function sendMessage(messageRequest) {
+    const requesterId = messageRequest.fields[process.env.AIRTABLE_MR_REQUESTER_FIELD_NAME];
+    if (!requesterId) {
+        console.error(`Error: no requester id found for message request ${messageRequest.id}`);
+        await message_requests_airtable.update(messageRequest.id, {
+            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No requester identifier found. Make sure you\'re filling out all needed fields.'
+        });
+        return;
+    }
+    const targetSlackId = messageRequest.fields[process.env.AIRTABLE_MR_TARGET_FIELD_NAME];
+    if (!targetSlackId) {
+        console.error(`Error: no target slack id found for message request ${messageRequest.id}`);
+        await message_requests_airtable.update(messageRequest.id, {
+            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No target slack id found. Make sure you\'re filling out all needed fields.'
+        });
+        return;
+    }
+    const msgText = messageRequest.fields[process.env.AIRTABLE_MR_MSG_TEXT_FIELD_NAME];
+    if (!msgText) {
+        console.error(`Error: no message text found for message request ${messageRequest.id}`);
+        await message_requests_airtable.update(messageRequest.id, {
+            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No message text found. Make sure you\'re filling out all needed fields.'
+        });
+        return;
+    }
+    const msgBlocksStr = messageRequest.fields[process.env.AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME];
+    let msgBlocks = undefined;
+    if (msgBlocksStr) {
+        try {
+            msgBlocks = JSON.parse(msgBlocksStr);
+            console.log(`Parsed message blocks from message request ${messageRequest.id}`);
+        } catch (error) {
+            console.error(`Error parsing message blocks for message request ${messageRequest.id}: ${error}`);
+            await message_requests_airtable.update(messageRequest.id, {
+                [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+                [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: `Error parsing message blocks: ${error}`
+            });
+            return;
+        }
+    }
+    console.log(`Sending message to ${targetSlackId} from ${requesterId} (${msgBlocks ? "with": "with no"} blocks): ${msgText.substring(0, 50)}...`);
+    let errorMsg = undefined;
+    try {
+        const result = await app.client.chat.postMessage({
+            channel: targetSlackId,
+            text: msgText,
+            blocks: msgBlocks ? msgBlocks : undefined
+        });
+        if (!result.ok) {
+            errorMsg = result.error;
+        }
+    } catch (error) {
+        errorMsg = error.message;
+    }
+    if (errorMsg) {
+        console.error(`Error sending message to ${targetSlackId}: ${errorMsg}`);
+        await message_requests_airtable.update(messageRequest.id, {
+            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: errorMsg
+        });
+    } else {
+        console.log('... message sent successfully.');
+        await message_requests_airtable.update(messageRequest.id, {
+            [process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME]: true
+        });
+    }
+    console.log("message handled.")
 }
 
 async function handleJoinRequest(joinRequestRecord) {
@@ -272,5 +377,5 @@ server.on('request', async (req, res) => {
     server.listen(process.env.PORT);
     console.log(`Server listening on port ${process.env.PORT}`);
     // poll airtable every 30 seconds
-    setInterval(pollAirtable, 30000);
+    setInterval(pollAirtable, parseInt(process.env.AIRTABLE_POLLING_RATE_MS));
 })();
