@@ -82,7 +82,6 @@ async function pollAirtable() {
         }
     }
     console.log(`all ${messageRequests ? 0 : messageRequests.length} messages handled.`)
-    return; // for testing: only handle message requests for now
 
     try {
         const joinRequestsRecords = await join_requests_airtable.read({
