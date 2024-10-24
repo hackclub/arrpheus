@@ -126,6 +126,16 @@ export async function upgradeUser(client, user, channels) {
       await client.conversations.invite({ channel, users: user })
     } catch (e) {
       console.error(`Error inviting user to ${channel}: ${e}`)
+      if (e.data.error.includes('not_in_channel')) {
+        console.log(`attempting to join ${channel}...`)
+        await client.conversations.join({ channel })
+        console.log(`joined ${channel}`)
+        try {
+          await client.conversations.invite({ channel, users: user })
+        } catch (e) {
+          console.error(`Error inviting user to ${channel}, even after joining: ${e}`)
+        }
+      }
     }
   }
   console.log(`User ${user} upgraded in ${Date.now() - startPerf}ms`)
