@@ -37,6 +37,8 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME", "AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME",
     "AIRTABLE_MR_SEND_FAILURE_FIELD_NAME", "AIRTABLE_MR_FAILURE_REASON_FIELD_NAME",
     "AIRTABLE_MR_AUTONUMBER_FIELD_NAME",
+    "AIRTABLE_CONFIG_TABLE_NAME",
+    "AIRTABLE_CONFIG_PROMOTION_CHANNELS_FIELD_NAME", "AIRTABLE_CONFIG_JOIN_CHANNELS_FIELD_NAME",
     "SLACK_WELCOME_MESSAGE", "SLACK_LOGGING_CHANNEL",
     "PORT", "AIRTABLE_POLLING_RATE_MS"];
 const missingEnvVars = envVarsUsed.filter(envVar => !process.env[envVar]);
@@ -68,6 +70,12 @@ const join_requests_base_airtable = new AirtablePlus({
     baseID: process.env.AIRTABLE_JRB_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_JRB_TABLE_NAME!
+    });
+
+const config_airtable = new AirtablePlus({
+    baseID: process.env.AIRTABLE_HS_BASE_ID!,
+    apiKey: process.env.AIRTABLE_API_KEY!,
+    tableName: process.env.AIRTABLE_CONFIG_TABLE_NAME!
     });
 
 
@@ -118,7 +126,11 @@ async function pollAirtable() {
 
         if (highSeasRecords.length > 0) {
             console.log('Promoting user');
-            const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]);
+            const configRecords = await config_airtable.read();
+            const configRecord = configRecords[0];
+            const channels = configRecord.fields[process.env.AIRTABLE_CONFIG_PROMOTION_CHANNELS_FIELD_NAME];
+
+            const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME], channels);
             if (result.ok) {
                 await people_airtable.update(highSeasRecords[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
@@ -216,7 +228,11 @@ async function handleJoinRequest(joinRequestRecord) {
     console.log('Inviting user to Slack');
     const email = joinRequestRecord.fields[process.env.AIRTABLE_HS_EMAIL_FIELD_NAME];
 
-    const result = await inviteSlackUser({email});
+    const configRecords = await config_airtable.read();
+    const configRecord = configRecords[0];
+    const channels = configRecord.fields[process.env.AIRTABLE_CONFIG_JOIN_CHANNELS_FIELD_NAME];    
+
+    const result = await inviteSlackUser({email, channels});
     console.log('Result of inviting user to Slack');
     console.log(result);
     if (!result.ok) {
@@ -366,7 +382,10 @@ server.on('request', async (req, res) => {
                 res.end('User not found in Airtable');
                 return;
             }
-            const result = await upgradeUser(app.client, userSlackId);
+            const configRecords = await config_airtable.read();
+            const configRecord = configRecords[0];
+            const channels = configRecord.fields[process.env.AIRTABLE_CONFIG_PROMOTION_CHANNELS_FIELD_NAME];
+            const result = await upgradeUser(app.client, userSlackId, channels);
             if (result.ok) {
                 await people_airtable.update(userRecord[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true

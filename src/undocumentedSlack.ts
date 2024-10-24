@@ -31,7 +31,7 @@ async function inviteGuestToSlackToriel({ email, channels }) {
       },
     ],
     restricted: true,
-    channels: channels.join(','),
+    channels,
   })
 
   const r = await fetch(`https://slack.com/api/users.admin.inviteBulk`, {
@@ -56,13 +56,7 @@ async function inviteGuestToSlackToriel({ email, channels }) {
   return { ok: true }
 }
 
-let channels = [
-    "C07P1245TL7" // #thingy-test, to become #high-seas-welcome
-];
-
-let csvChannels = channels.join(",");
-
-export async function inviteSlackUser({ email }) {
+export async function inviteSlackUser({ email, channels }) {
     try {
         console.log(`Inviting ${email} to Slack...`);
         const result = await inviteGuestToSlackToriel({ email, channels })
@@ -76,7 +70,7 @@ export async function inviteSlackUser({ email }) {
     }
 }
 
-export async function upgradeUser(client, user) {
+export async function upgradeUser(client, user, channels) {
   const userProfile = await client.users.info({ user })
   const { team_id } = userProfile.user
 
@@ -124,5 +118,16 @@ export async function upgradeUser(client, user) {
   const j = await r.json()
   console.log('Got promotion response:')
   console.log(JSON.stringify(j, null, 2))
+  console.log(`Inviting user to ${channels.length} channels...`)
+  const indivChannels = channels.split(',')
+  for (const channel of indivChannels) {
+    console.log(`Inviting user to ${channel}...`)
+    try {
+      await client.conversations.invite({ channel, users: user })
+    } catch (e) {
+      console.error(`Error inviting user to ${channel}: ${e}`)
+    }
+  }
+  console.log(`User ${user} upgraded in ${Date.now() - startPerf}ms`)
   return j
 }
