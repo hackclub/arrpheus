@@ -8,6 +8,15 @@ if (!process.env["NODE_ENV"] || process.env["NODE_ENV"] !== "production") {
 require('dotenv').config();
 }
 
+// a note on env var naming conventions:
+// the HS/JR/JRB/MR prefixes refer to the purpose of that field.
+// they've gotten a little muddied and were clearer in older versions.
+// in theory, they're for High Seas, Join Requests, Join Requests Base, and Message Requests, respectively.
+// Join Requests is for fields in the people table in the High Seas base.
+// Join Requests Base is for fields in the *separate* Join Requests base.
+// HS and JR have some overlap.
+// ... it's a mess. sorry.
+
 const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "SLACK_BROWSER_TOKEN", "SLACK_COOKIE",
     "AIRTABLE_API_KEY", "AIRTABLE_HS_BASE_ID", "AIRTABLE_HS_TABLE_NAME", 
@@ -18,6 +27,11 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME",
     "AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME", "AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME",
     "AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME", "AIRTABLE_JR_AUTH_LINK_FIELD_NAME",
+    "AIRTABLE_JR_FIRST_NAME_FIELD_NAME", "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
+    "AIRTABLE_JR_IP_ADDR_FIELD_NAME",
+    "AIRTABLE_JRB_BASE_ID", "AIRTABLE_JRB_TABLE_NAME",
+    "AIRTABLE_JRB_FIRST_NAME_FIELD_NAME", "AIRTABLE_JRB_EMAIL_FIELD_NAME",
+    "AIRTABLE_JRB_LAST_NAME_FIELD_NAME", "AIRTABLE_JRB_IP_ADDR_FIELD_NAME",
     "AIRTABLE_MR_TABLE_NAME", "AIRTABLE_MR_REQUESTER_FIELD_NAME",
     "AIRTABLE_MR_TARGET_FIELD_NAME", "AIRTABLE_MR_MSG_TEXT_FIELD_NAME",
     "AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME", "AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME",
@@ -48,6 +62,12 @@ const message_requests_airtable = new AirtablePlus({
     baseID: process.env.AIRTABLE_HS_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_MR_TABLE_NAME!
+    });
+
+const join_requests_base_airtable = new AirtablePlus({
+    baseID: process.env.AIRTABLE_JRB_BASE_ID!,
+    apiKey: process.env.AIRTABLE_API_KEY!,
+    tableName: process.env.AIRTABLE_JRB_TABLE_NAME!
     });
 
 
@@ -212,6 +232,14 @@ async function handleJoinRequest(joinRequestRecord) {
     people_airtable.update(joinRequestRecord.id, {
         [process.env.AIRTABLE_JR_INVITED_FIELD_NAME]: true,
         [process.env.AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME]: generateUUID(),
+    });
+
+    // also log to join requests base
+    join_requests_base_airtable.create({
+        [process.env.AIRTABLE_JRB_FIRST_NAME_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_FIRST_NAME_FIELD_NAME],
+        [process.env.AIRTABLE_JRB_LAST_NAME_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_LAST_NAME_FIELD_NAME],
+        [process.env.AIRTABLE_JRB_EMAIL_FIELD_NAME]: email,
+        [process.env.AIRTABLE_JRB_IP_ADDR_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_IP_ADDR_FIELD_NAME],
     });
     return result;
 }
