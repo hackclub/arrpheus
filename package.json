@@ -11,7 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@slack/bolt": "^3.21.4",
+    "@slack/bolt": "^4.0.1",
     "@types/node": "^22.7.0",
     "airtable-plus": "^1.0.4",
     "dotenv": "^16.4.5",
