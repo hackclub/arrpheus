@@ -15,12 +15,10 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME", 
     "AIRTABLE_HS_EMAIL_FIELD_NAME", "AIRTABLE_HS_SLACK_ID_FIELD_NAME",
     "AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME", "AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME",
-    "AIRTABLE_HS_FIRST_NAME_FIELD_NAME", "AIRTABLE_HS_LAST_NAME_FIELD_NAME",
-    "AIRTABLE_HS_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_BASE_ID",
-    "AIRTABLE_JR_TABLE_NAME", "AIRTABLE_JR_EMAIL_FIELD_NAME",
     "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITABLE_FIELD_NAME",
-    "AIRTABLE_JR_IP_ADDRESS_FIELD_NAME", "AIRTABLE_JR_FIRST_NAME_FIELD_NAME",
-    "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
+    "AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME",
+    "AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME", "AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME",
+    "AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME", "AIRTABLE_JR_AUTH_LINK_FIELD_NAME",
     "AIRTABLE_MR_TABLE_NAME", "AIRTABLE_MR_REQUESTER_FIELD_NAME",
     "AIRTABLE_MR_TARGET_FIELD_NAME", "AIRTABLE_MR_MSG_TEXT_FIELD_NAME",
     "AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME", "AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME",
@@ -41,7 +39,7 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN, // App-level token for socket mode
 });
 
-const high_seas_airtable = new AirtablePlus({
+const people_airtable = new AirtablePlus({
     baseID: process.env.AIRTABLE_HS_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_HS_TABLE_NAME!
@@ -53,11 +51,6 @@ const message_requests_airtable = new AirtablePlus({
     tableName: process.env.AIRTABLE_MR_TABLE_NAME!
     });
 
-const join_requests_airtable = new AirtablePlus({
-    baseID: process.env.AIRTABLE_JR_BASE_ID!,
-    apiKey: process.env.AIRTABLE_API_KEY!,
-    tableName: process.env.AIRTABLE_JR_TABLE_NAME!
-    });
 
 async function pollAirtable() {
     console.log('Polling airtable');
@@ -84,8 +77,8 @@ async function pollAirtable() {
     console.log(`all ${messageRequests ? 0 : messageRequests.length} messages handled.`)
 
     try {
-        const joinRequestsRecords = await join_requests_airtable.read({
-            filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}))`,
+        const joinRequestsRecords = await people_airtable.read({
+            filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
             maxRecords: 1,
         });
 
@@ -99,7 +92,7 @@ async function pollAirtable() {
     }
 
     try {
-        const highSeasRecords = await high_seas_airtable.read({
+        const highSeasRecords = await people_airtable.read({
             filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}))`,
             maxRecords: 1,
         });
@@ -108,7 +101,7 @@ async function pollAirtable() {
             console.log('Promoting user');
             const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]);
             if (result.ok) {
-                await high_seas_airtable.update(highSeasRecords[0].id, {
+                await people_airtable.update(highSeasRecords[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
                 });
             }
@@ -190,36 +183,36 @@ async function sendMessage(messageRequest) {
     console.log("message handled.")
 }
 
+function generateUUID() {
+    // Generate a random UUID (version 4)
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+
 async function handleJoinRequest(joinRequestRecord) {
     // invite user to slack
     console.log('Inviting user to Slack');
-    const email = joinRequestRecord.fields[process.env.AIRTABLE_JR_EMAIL_FIELD_NAME];
+    const email = joinRequestRecord.fields[process.env.AIRTABLE_HS_EMAIL_FIELD_NAME];
 
     const result = await inviteSlackUser({email});
     console.log('Result of inviting user to Slack');
     console.log(result);
     if (!result.ok) {
         console.error(`Error inviting user ${email} to Slack`);
-        join_requests_airtable.update(joinRequestRecord.id, {
-            [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true
+        people_airtable.update(joinRequestRecord.id, {
+            [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true,
+            [process.env.AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME]: result.error,
+            [process.env.AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME]: result.error.includes("already_in_team") ? true : false
         });
         return result;
     }
     // update Join Requests record
-    join_requests_airtable.update(joinRequestRecord.id, {
-        [process.env.AIRTABLE_JR_INVITED_FIELD_NAME]: true
-    });
-    // carry new info into High Seas record
-    const firstName = joinRequestRecord.fields[process.env.AIRTABLE_JR_FIRST_NAME_FIELD_NAME];
-    const lastName = joinRequestRecord.fields[process.env.AIRTABLE_JR_LAST_NAME_FIELD_NAME];
-    const ipAddress = joinRequestRecord.fields[process.env.AIRTABLE_JR_IP_ADDRESS_FIELD_NAME];
-    await high_seas_airtable.create({
-        [process.env.AIRTABLE_HS_EMAIL_FIELD_NAME]: email,
-        [process.env.AIRTABLE_HS_FIRST_NAME_FIELD_NAME]: firstName,
-        [process.env.AIRTABLE_HS_LAST_NAME_FIELD_NAME]: lastName,
-        [process.env.AIRTABLE_HS_IP_ADDRESS_FIELD_NAME]: ipAddress,
-        [process.env.AIRTABLE_HS_INVITE_REQUESTED_FIELD_NAME]: true,
-        [process.env.AIRTABLE_HS_INVITE_SENT_FIELD_NAME]: true
+    people_airtable.update(joinRequestRecord.id, {
+        [process.env.AIRTABLE_JR_INVITED_FIELD_NAME]: true,
+        [process.env.AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME]: generateUUID(),
     });
     return result;
 }
@@ -241,7 +234,7 @@ app.event('team_join', async ({ event, client }) => {
         });
         return;
     }
-    const userRecords = await high_seas_airtable.read({
+    const userRecords = await people_airtable.read({
         filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`
     });
     console.log(`Got ${userRecords.length} records`);
@@ -265,7 +258,7 @@ app.event('team_join', async ({ event, client }) => {
     }
     const userRecord = userRecords[0];
     console.log(`User record: ${JSON.stringify(userRecord)}`);
-    await high_seas_airtable.update(userRecord.id, {
+    await people_airtable.update(userRecord.id, {
         [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
         [process.env.AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME]: true,
         [process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME]: true // those square brackets are ES6 computed property names
@@ -274,7 +267,7 @@ app.event('team_join', async ({ event, client }) => {
     // send welcome message
     await client.chat.postMessage({
         channel: event.user.id,
-        text: process.env.SLACK_WELCOME_MESSAGE
+        text: process.env.SLACK_WELCOME_MESSAGE.replace("MAGIC_LINK_HERE", userRecord.fields[process.env.AIRTABLE_JR_AUTH_LINK_FIELD_NAME])
     });
 
 });
@@ -300,8 +293,8 @@ server.on('request', async (req, res) => {
             }
             console.log('Invite user data:', data);
             const userEmail = data.email;
-            const userRecord = await join_requests_airtable.read({
-                filterByFormula: `{${process.env.AIRTABLE_JR_EMAIL_FIELD_NAME}} = '${userEmail}'`,
+            const userRecord = await people_airtable.read({
+                filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${userEmail}'`,
                 maxRecords: 1,
                 sort: [{field: 'autonumber', direction: 'desc'}]
             });
@@ -336,7 +329,7 @@ server.on('request', async (req, res) => {
             }
             console.log('Upgrade user data:', data);
             const userSlackId = data.slack_id;
-            const userRecord = await high_seas_airtable.read({
+            const userRecord = await people_airtable.read({
                 filterByFormula: `{${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${userSlackId}'`,
                 maxRecords: 1,
                 sort: [{field: 'autonumber', direction: 'desc'}]
@@ -348,7 +341,7 @@ server.on('request', async (req, res) => {
             }
             const result = await upgradeUser(app.client, userSlackId);
             if (result.ok) {
-                await high_seas_airtable.update(userRecord[0].id, {
+                await people_airtable.update(userRecord[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
                 });
                 res.writeHead(200, { 'Content-Type': 'application/json' });
