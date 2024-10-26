@@ -37,6 +37,7 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME", "AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME",
     "AIRTABLE_MR_SEND_FAILURE_FIELD_NAME", "AIRTABLE_MR_FAILURE_REASON_FIELD_NAME",
     "AIRTABLE_MR_AUTONUMBER_FIELD_NAME",
+    "AIRTABLE_MR_UNFURL_LINKS_FIELD_NAME", "AIRTABLE_MR_UNFURL_MEDIA_FIELD_NAME",
     "AIRTABLE_CONFIG_TABLE_NAME",
     "AIRTABLE_CONFIG_PROMOTION_CHANNELS_FIELD_NAME", "AIRTABLE_CONFIG_JOIN_CHANNELS_FIELD_NAME",
     "SLACK_WELCOME_MESSAGE", "SLACK_LOGGING_CHANNEL",
@@ -185,7 +186,9 @@ async function sendMessage(messageRequest) {
             return;
         }
     }
-    console.log(`Sending message to ${targetSlackId} from ${requesterId} (${msgBlocks ? "with": "with no"} blocks): ${msgText.substring(0, 50)}...`);
+    let unfurlLinks = messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_LINKS_FIELD_NAME];
+    let unfurlMedia = messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_MEDIA_FIELD_NAME];
+    console.log(`Sending message to ${targetSlackId} from ${requesterId} (${msgBlocks ? "with": "with no"} blocks, unfurling links: ${unfurlLinks}, unfurling media: ${unfurlMedia}): ${msgText.substring(0, 50)}...`);
     let errorMsg = undefined;
     try {
         const result = await app.client.chat.postMessage({
