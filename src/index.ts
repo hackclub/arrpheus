@@ -312,8 +312,8 @@ app.event('team_join', async ({ event, client }) => {
     await client.chat.postMessage({
         channel: event.user.id,
         text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME],
-        username: 'Slackbot',
-        icon_url: 'https://cloud-ozbftzn46-hack-club-bot.vercel.app/0t0266frgm-uslackbot-sv41d8cd98f0-512.png',
+        username: 'Arrpheus',
+        icon_url: 'https://noras-secret-cdn.hackclub.dev/yeah_of_course_river_np.png',
     });
 
 });
