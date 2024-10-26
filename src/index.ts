@@ -186,15 +186,17 @@ async function sendMessage(messageRequest) {
             return;
         }
     }
-    let unfurlLinks = messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_LINKS_FIELD_NAME];
-    let unfurlMedia = messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_MEDIA_FIELD_NAME];
+    let unfurlLinks = !!messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_LINKS_FIELD_NAME]; // cast to boolean
+    let unfurlMedia = !!messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_MEDIA_FIELD_NAME];
     console.log(`Sending message to ${targetSlackId} from ${requesterId} (${msgBlocks ? "with": "with no"} blocks, unfurling links: ${unfurlLinks}, unfurling media: ${unfurlMedia}): ${msgText.substring(0, 50)}...`);
     let errorMsg = undefined;
     try {
         const result = await app.client.chat.postMessage({
             channel: targetSlackId,
             text: msgText,
-            blocks: msgBlocks ? msgBlocks : undefined
+            blocks: msgBlocks ? msgBlocks : undefined,
+            unfurl_links: unfurlLinks,
+            unfurl_media: unfurlMedia
         });
         if (!result.ok) {
             errorMsg = result.error;
