@@ -313,7 +313,7 @@ app.event('team_join', async ({ event, client }) => {
         channel: event.user.id,
         text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_LINK_FIELD_NAME],
         username: 'Slackbot',
-        icon_url: 'https://ca.slack-edge.com/T0266FRGM-USLACKBOT-sv41d8cd98f0-512',
+        icon_url: 'https://cloud-ozbftzn46-hack-club-bot.vercel.app/0t0266frgm-uslackbot-sv41d8cd98f0-512.png',
     });
 
 });
