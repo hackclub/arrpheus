@@ -251,12 +251,13 @@ async function handleJoinRequest(joinRequestRecord) {
     });
 
     // also log to join requests base
-    join_requests_base_airtable.create({
-        [process.env.AIRTABLE_JRB_FIRST_NAME_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_FIRST_NAME_FIELD_NAME],
-        [process.env.AIRTABLE_JRB_LAST_NAME_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_LAST_NAME_FIELD_NAME],
-        [process.env.AIRTABLE_JRB_EMAIL_FIELD_NAME]: email,
-        [process.env.AIRTABLE_JRB_IP_ADDR_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_IP_ADDR_FIELD_NAME],
-    });
+    // actually we're not doing this, see https://hackclub.slack.com/archives/C07MS92E0J3/p1729880392714889?thread_ts=1729878568.963819&cid=C07MS92E0J3
+    // join_requests_base_airtable.create({
+    //     [process.env.AIRTABLE_JRB_FIRST_NAME_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_FIRST_NAME_FIELD_NAME],
+    //     [process.env.AIRTABLE_JRB_LAST_NAME_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_LAST_NAME_FIELD_NAME],
+    //     [process.env.AIRTABLE_JRB_EMAIL_FIELD_NAME]: email,
+    //     [process.env.AIRTABLE_JRB_IP_ADDR_FIELD_NAME]: joinRequestRecord.fields[process.env.AIRTABLE_JR_IP_ADDR_FIELD_NAME],
+    // });
     return result;
 }
 
@@ -310,7 +311,9 @@ app.event('team_join', async ({ event, client }) => {
     // send welcome message
     await client.chat.postMessage({
         channel: event.user.id,
-        text: process.env.SLACK_WELCOME_MESSAGE.replace("MAGIC_LINK_HERE", userRecord.fields[process.env.AIRTABLE_JR_AUTH_LINK_FIELD_NAME])
+        text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_LINK_FIELD_NAME],
+        username: 'Slackbot',
+        icon_url: 'https://ca.slack-edge.com/T0266FRGM-USLACKBOT-sv41d8cd98f0-512',
     });
 
 });
