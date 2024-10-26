@@ -26,7 +26,7 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITABLE_FIELD_NAME",
     "AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME",
     "AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME", "AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME",
-    "AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME", "AIRTABLE_JR_AUTH_LINK_FIELD_NAME",
+    "AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME", "AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME",
     "AIRTABLE_JR_FIRST_NAME_FIELD_NAME", "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
     "AIRTABLE_JR_IP_ADDR_FIELD_NAME",
     "AIRTABLE_JRB_BASE_ID", "AIRTABLE_JRB_TABLE_NAME",
@@ -311,7 +311,7 @@ app.event('team_join', async ({ event, client }) => {
     // send welcome message
     await client.chat.postMessage({
         channel: event.user.id,
-        text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_LINK_FIELD_NAME],
+        text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME],
         username: 'Slackbot',
         icon_url: 'https://cloud-ozbftzn46-hack-club-bot.vercel.app/0t0266frgm-uslackbot-sv41d8cd98f0-512.png',
     });
