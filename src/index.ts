@@ -20,7 +20,8 @@ require('dotenv').config();
 const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "SLACK_BROWSER_TOKEN", "SLACK_COOKIE",
     "AIRTABLE_API_KEY", "AIRTABLE_HS_BASE_ID", "AIRTABLE_HS_TABLE_NAME", 
-    "AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME", 
+    "AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME", "AIRTABLE_HS_PROMOTED_FIELD_NAME",
+    "AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME", "AIRTABLE_HS_PROMOTE_FAILURE_REASON_FIELD_NAME",
     "AIRTABLE_HS_EMAIL_FIELD_NAME", "AIRTABLE_HS_SLACK_ID_FIELD_NAME",
     "AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME", "AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME",
     "AIRTABLE_JR_INVITED_FIELD_NAME", "AIRTABLE_JR_UNINVITABLE_FIELD_NAME",
@@ -121,7 +122,7 @@ async function pollAirtable() {
 
     try {
         const highSeasRecords = await people_airtable.read({
-            filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}))`,
+            filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME}}))`,
             maxRecords: 1,
         });
 
@@ -135,6 +136,11 @@ async function pollAirtable() {
             if (result.ok) {
                 await people_airtable.update(highSeasRecords[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
+                });
+            } else {
+                await people_airtable.update(highSeasRecords[0].id, {
+                    [process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME]: true,
+                    [process.env.AIRTABLE_HS_PROMOTE_FAILURE_REASON_FIELD_NAME]: result.error
                 });
             }
         }
