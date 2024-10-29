@@ -29,7 +29,7 @@ const envVarsUsed = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
     "AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME", "AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME",
     "AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME", "AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME",
     "AIRTABLE_JR_FIRST_NAME_FIELD_NAME", "AIRTABLE_JR_LAST_NAME_FIELD_NAME",
-    "AIRTABLE_JR_IP_ADDR_FIELD_NAME",
+    "AIRTABLE_JR_IP_ADDR_FIELD_NAME", "AIRTABLE_JR_AUTH_MESSAGE_BLOCKS_FIELD_NAME",
     "AIRTABLE_JRB_BASE_ID", "AIRTABLE_JRB_TABLE_NAME",
     "AIRTABLE_JRB_FIRST_NAME_FIELD_NAME", "AIRTABLE_JRB_EMAIL_FIELD_NAME",
     "AIRTABLE_JRB_LAST_NAME_FIELD_NAME", "AIRTABLE_JRB_IP_ADDR_FIELD_NAME",
@@ -313,6 +313,20 @@ app.event('team_join', async ({ event, client }) => {
     }
     const userRecord = userRecords[0];
     console.log(`User record: ${JSON.stringify(userRecord)}`);
+    const msgBlocksStr = userRecord.fields[process.env.AIRTABLE_HS_WELCOME_MESSAGE_BLOCKS_FIELD_NAME];
+    let msgBlocks = undefined;
+    if (msgBlocksStr) {
+        try {
+            msgBlocks = JSON.parse(msgBlocksStr);
+            console.log(`Parsed message blocks from user join event ${userRecord.id}`);
+        } catch (error) {
+            console.error(`Error parsing message blocks for user join event ${userRecord.id}: ${error}`);
+            await client.chat.postMessage({
+                channel: process.env.SLACK_LOGGING_CHANNEL,
+                text: `ERROR: Error parsing message blocks for user join event ${userRecord.id}: ${error}`
+            });
+        }
+    }
     await people_airtable.update(userRecord.id, {
         [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
         [process.env.AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME]: true,
@@ -323,6 +337,7 @@ app.event('team_join', async ({ event, client }) => {
     await client.chat.postMessage({
         channel: event.user.id,
         text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME],
+        blocks: msgBlocks ? msgBlocks : undefined,
         username: 'Arrpheus',
         icon_url: 'https://noras-secret-cdn.hackclub.dev/yeah_of_course_river_np.png',
     });
