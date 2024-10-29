@@ -426,6 +426,10 @@ server.on('request', async (req, res) => {
                 res.end(JSON.stringify(result));
             }
         });
+    } else if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
+
     } else {
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         res.end('Requests only POST to /invite-user');
