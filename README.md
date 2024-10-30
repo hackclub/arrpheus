@@ -14,6 +14,9 @@ If Airtable load is coming from a high number of join/message/promotion requests
 
 If Airtable load is coming from a high number of joins, things are harder. Joins are indirectly limited by the how quickly Arrpheus can send join requests (`10*polling_rate` max) so they can be reduced by reducing the polling rate. However, there's no perfect solution here - we need to track joins and log them to the DB, so we're a bit stuck.
 
+### Worst case scenario
+If team joins are having a ton of impact then we can just... not listen for them. This would mean we would have to reconstruct `slack_has_signed_in` from looking ta who's in #high-seas. To do this, this would mean commenting out the `people_airtable.update` call around line 363. We can't remove the `read` call because we need to be able to get the magic auth token.
+
 ## Theoretical impact improvement strategies
 There are two ways I can see to reduce the worse-case request rate, but both would require significant architectural changes.
 1. Combine Promotion and Join requests into one set of requests. Would reduce worst-case request rate to `4 * polling_rate + 2 * join_rate`.
