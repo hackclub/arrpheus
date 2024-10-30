@@ -16,7 +16,7 @@ export class AirtableFetch {
         let paramsObj = {}
         if (args && args.filterByFormula) {
             //console.log(`encoding formula: ${args.filterByFormula}`)
-            const newFormula = args.filterByFormula.replaceAll(",", "%2C").replaceAll("=", "%3D").replaceAll("{", "%7B").replaceAll("}", "%7D").replaceAll("+", "%2B").replaceAll("/", "%2F").replaceAll("").replaceAll(" ", "+") // ' and , aren't encoded and <space>->+ for some reason
+            const newFormula = args.filterByFormula.replaceAll(",", "%2C").replaceAll("=", "%3D").replaceAll("{", "%7B").replaceAll("}", "%7D").replaceAll("+", "%2B").replaceAll("/", "%2F").replaceAll(" ", "+") // ' and , aren't encoded and <space>->+ for some reason
             //console.log(`encoded formula: ${newFormula}`)
             paramsObj['filterByFormula'] = newFormula
         }
