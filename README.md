@@ -1,3 +1,24 @@
+## Airtable impact
+The Airtable rate limit impact depends on the polling rate and the rate at which users are joining the Slack. I'll call these values `polling_rate` and `join_rate` respectively, both in Hertz.
+
+The worst-case request rate is `6 * polling_rate + 2 * join_rate` requests per second. This occurs when there are pending messages, invites, and promotions, AND there's a significant number of joins.
+
+Per poll, Arrpheus can send 10 messages, invite 10 people, and promote 1 person.
+
+The Message, Join, and Promotion Requests each have an impact of `polling_rate` when there are none of that request and `polling_rate * 2` when there's at least 1 of that request.
+
+Also, for each person that joins the Slack, there's 2 requests sent.
+
+## Airtable impact reduction
+If Airtable load is coming from a high number of join/message/promotion requests, the impact can be reduced by decreasing the polling rate. This will reduce the number of requests sent at the tradeoff of increased time for Arrpheus to fulfill requests.
+
+If Airtable load is coming from a high number of joins, things are harder. Joins are indirectly limited by the how quickly Arrpheus can send join requests (`10*polling_rate` max) so they can be reduced by reducing the polling rate. However, there's no perfect solution here - we need to track joins and log them to the DB, so we're a bit stuck.
+
+## Theoretical impact improvement strategies
+There are two ways I can see to reduce the worse-case request rate, but both would require significant architectural changes.
+1. Combine Promotion and Join requests into one set of requests. Would reduce worst-case request rate to `4 * polling_rate + 2 * join_rate`.
+2. Batch user join event reads and updates. Would reduce worst-case request rate to `6 * polling_rate + join_rate/5`.
+
 ## .env
 Too much is here, the secrets are `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_BROWSER_TOKEN`, `SLACK_COOKIE`, and `AIRTABLE_API_KEY`.
 

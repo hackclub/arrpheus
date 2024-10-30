@@ -11,6 +11,7 @@ require('dotenv').config();
 // new-style config vars that are actually checked into git (:
 const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07PZNMBPBN" // Currently low-skies and low-skies-help, TODO: add -ships and -bulletin when those get made public
 const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0" // #lounge, #library, #welcone, #scrapbook, #code
+const POLLING_RATE_MS = 7000;
 
 // a note on env var naming conventions:
 // the HS/JR/JRB/MR prefixes refer to the purpose of that field.
@@ -473,5 +474,5 @@ server.on('request', async (req, res) => {
     server.listen(process.env.PORT);
     console.log(`Server listening on port ${process.env.PORT}`);
     // poll airtable every 30 seconds
-    setInterval(pollAirtable, parseInt(process.env.AIRTABLE_POLLING_RATE_MS));
+    setInterval(pollAirtable, POLLING_RATE_MS);
 })();
