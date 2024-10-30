@@ -9,7 +9,7 @@ require('dotenv').config();
 }
 
 // new-style config vars that are actually checked into git (:
-const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07PZNMBPBN" // Currently low-skies and low-skies-help, TODO: add -ships and -bulletin when those get made public
+const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07TNAZGMHS,C07UA18MXBJ,C07PZNMBPBN" // #high-seas, #high-seas-bulletin, #high-seas-ships, #high-seas-help
 const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0" // #lounge, #library, #welcone, #scrapbook, #code
 const POLLING_RATE_MS = 7000;
 
