@@ -93,6 +93,7 @@ async function pollAirtable() {
          messageRequests = await message_requests_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME}}), NOT({${process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME}}))`,
             maxRecords: 10,
+            view: 'Grid+view'
             //sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}] just going to not implement this cursed encoding scheme, it'll only become a problem if the backlog grows and then we have bigger problems anyways
         });
     } catch (error) {
@@ -117,7 +118,8 @@ async function pollAirtable() {
         let updatedRecords = [];
         const joinRequestsRecords = await people_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
-            maxRecords: 10
+            maxRecords: 10,
+            view: 'Grid+view'
         });
 
         for (const joinRequest of joinRequestsRecords) {
@@ -140,7 +142,8 @@ async function pollAirtable() {
     try {
         const highSeasRecords = await people_airtable.read({
             filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME}}))`,
-            maxRecords: 1
+            maxRecords: 1,
+            view: 'Grid+view'
         });
 
         if (highSeasRecords.length > 0) {

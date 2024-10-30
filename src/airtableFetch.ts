@@ -12,7 +12,7 @@ export class AirtableFetch {
         this.url = this.urlBase + baseID + '/' + tableName;
     }
 
-    async read(args: {filterByFormula?, maxRecords?} | undefined=undefined) {
+    async read(args: {filterByFormula?, maxRecords?, view?} | undefined=undefined) {
         let paramsObj = {}
         if (args && args.filterByFormula) {
             //console.log(`encoding formula: ${args.filterByFormula}`)
@@ -22,6 +22,9 @@ export class AirtableFetch {
         }
         if (args && args.maxRecords) {
             paramsObj['maxRecords'] = args.maxRecords
+        }
+        if (args && args.view) {
+            paramsObj['view'] = args.view
         }
 
         let params = "";
