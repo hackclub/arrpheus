@@ -116,7 +116,7 @@ async function pollAirtable() {
         let updatedRecords = [];
         const joinRequestsRecords = await people_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
-            maxRecords: 1
+            maxRecords: 10
         });
 
         for (const joinRequest of joinRequestsRecords) {
