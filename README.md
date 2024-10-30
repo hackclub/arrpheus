@@ -10,7 +10,7 @@ The Message, Join, and Promotion Requests each have an impact of `polling_rate` 
 Also, for each person that joins the Slack, there's 2 requests sent.
 
 ## Airtable impact reduction
-If Airtable load is coming from a high number of join/message/promotion requests, the impact can be reduced by decreasing the polling rate. This will reduce the number of requests sent at the tradeoff of increased time for Arrpheus to fulfill requests.
+If Airtable load is coming from a high number of join/message/promotion requests, the impact can be reduced by decreasing the polling rate (the `POLLING_RATE_MS` var in `index.ts`). This will reduce the number of requests sent at the tradeoff of increased time for Arrpheus to fulfill requests.
 
 If Airtable load is coming from a high number of joins, things are harder. Joins are indirectly limited by the how quickly Arrpheus can send join requests (`10*polling_rate` max) so they can be reduced by reducing the polling rate. However, there's no perfect solution here - we need to track joins and log them to the DB, so we're a bit stuck.
 
