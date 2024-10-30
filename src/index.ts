@@ -95,7 +95,7 @@ async function pollAirtable() {
             maxRecords: 10,
             view: 'Grid+view'
             //sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}] just going to not implement this cursed encoding scheme, it'll only become a problem if the backlog grows and then we have bigger problems anyways
-        });
+        }, 'Arrpheus.poll.msg/1.0.0');
     } catch (error) {
         console.error('Error reading message requests airtable:', error);
         app.client.chat.postMessage({
@@ -110,7 +110,7 @@ async function pollAirtable() {
             updatedRecords.push(await sendMessage(messageRequest));
         }
         console.log(`Message requests: updating ${updatedRecords.length} records...`);
-        await message_requests_airtable.updateBulk(updatedRecords);
+        await message_requests_airtable.updateBulk(updatedRecords, 'Arrpheus.poll.msg/1.0.0');
     }
     console.log(`all ${messageRequests ? messageRequests.length : 0} messages handled.`)
 
@@ -120,7 +120,7 @@ async function pollAirtable() {
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
             maxRecords: 10,
             view: 'Grid+view'
-        });
+        }, 'Arrpheus.poll.jr/1.0.0');
 
         for (const joinRequest of joinRequestsRecords) {
             console.log('Inviting user');
@@ -133,7 +133,7 @@ async function pollAirtable() {
         if (updatedRecords.length > 0) {
             console.log(`Join requests: updating ${updatedRecords.length} records:`);
             console.log(updatedRecords);
-            await people_airtable.updateBulk(updatedRecords);
+            await people_airtable.updateBulk(updatedRecords, 'Arrpheus.poll.jr/1.0.0');
         }
     } catch (error) {
         console.error('Error reading join requests airtable:', error);
@@ -144,7 +144,7 @@ async function pollAirtable() {
             filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME}}))`,
             maxRecords: 1,
             view: 'Grid+view'
-        });
+        }, 'Arrpheus.poll.promo/1.0.0');
 
         if (highSeasRecords.length > 0) {
             console.log('Promoting user');
@@ -152,12 +152,12 @@ async function pollAirtable() {
             if (result.ok) {
                 await people_airtable.update(highSeasRecords[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
-                });
+                }, 'Arrpheus.poll.promo/1.0.0');
             } else {
                 await people_airtable.update(highSeasRecords[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME]: true,
                     [process.env.AIRTABLE_HS_PROMOTE_FAILURE_REASON_FIELD_NAME]: result.error
-                });
+                }, 'Arrpheus.poll.promo/1.0.0');
             }
         }
     } catch (error) {
@@ -324,7 +324,7 @@ app.event('team_join', async ({ event, client }) => {
     }
     const userRecords = await people_airtable.read({
         filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`,
-    });
+    }, 'Arrpheus.team_join/1.0.0');
     console.log(`Got ${userRecords.length} records`);
     if (userRecords.length === 0) {
         const errorString = `ERROR: When welcoming user, no airtable record found for user <@${event.user.id}> with email ${email}`;
@@ -364,7 +364,7 @@ app.event('team_join', async ({ event, client }) => {
         [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
         [process.env.AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME]: true,
         [process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME]: true // those square brackets are ES6 computed property names
-    });
+    }, 'Arrpheus.team_join/1.0.0');
     console.log(`Updated user record with slack id ${event.user.id}`);
     // send welcome message
     await client.chat.postMessage({
@@ -401,7 +401,7 @@ server.on('request', async (req, res) => {
             const userRecord = await people_airtable.read({
                 filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${userEmail}'`,
                 maxRecords: 1
-            });
+            }, 'Arrpheus.serv.jr/1.0.0');
             if (userRecord.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('User not found in Airtable');
@@ -415,6 +415,7 @@ server.on('request', async (req, res) => {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
             }
+            await people_airtable.update(result['airtableRecord'].id, result['airtableRecord'].fields, 'Arrpheus.serv.jr/1.0.0');
         });
     } else if (req.method === 'POST' && req.url === '/upgrade-user') {
         let body = '';
@@ -436,7 +437,7 @@ server.on('request', async (req, res) => {
             const userRecord = await people_airtable.read({
                 filterByFormula: `{${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${userSlackId}'`,
                 maxRecords: 1
-            });
+            }, 'Arrpheus.serv.promo/1.0.0');
             if (userRecord.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('User not found in Airtable');
@@ -447,7 +448,7 @@ server.on('request', async (req, res) => {
             if (result.ok) {
                 await people_airtable.update(userRecord[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
-                });
+                }, 'Arrpheus.serv.promo/1.0.0');
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
             } else {

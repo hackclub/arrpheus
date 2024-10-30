@@ -12,7 +12,7 @@ export class AirtableFetch {
         this.url = this.urlBase + baseID + '/' + tableName;
     }
 
-    async read(args: {filterByFormula?, maxRecords?, view?} | undefined=undefined) {
+    async read(args: {filterByFormula?, maxRecords?, view?} | undefined=undefined, userAgent = 'Arrpheus/1.0.0') {
         let paramsObj = {}
         if (args && args.filterByFormula) {
             //console.log(`encoding formula: ${args.filterByFormula}`)
@@ -37,7 +37,7 @@ export class AirtableFetch {
         const res = await fetch(this.url + '?' + params, {
             headers: {
                 Authorization: `Bearer ${this.apiKey}`,
-                'User-Agent': 'Arrpheus/1.0.0'
+                'User-Agent': userAgent
             }
         })
         //console.log("Got response:")
@@ -52,13 +52,13 @@ export class AirtableFetch {
         return json.records
     }
 
-    async update(recordId, fields) {
+    async update(recordId, fields, userAgent = 'Arrpheus/1.0.0') {
         const res = await fetch(this.url + '/' + recordId, {
             method: 'PATCH',
             headers: {
                 Authorization: `Bearer ${this.apiKey}`,
                 'Content-Type': 'application/json',
-                'User-Agent': 'Arrpheus/1.0.0'
+                'User-Agent': userAgent
             },
             body: JSON.stringify({fields})
         })
@@ -66,13 +66,13 @@ export class AirtableFetch {
         return json
     }
 
-    async updateBulk(records) {
+    async updateBulk(records, userAgent = 'Arrpheus/1.0.0') {
         const res = await fetch(this.url, {
             method: 'PATCH',
             headers: {
                 Authorization: `Bearer ${this.apiKey}`,
                 'Content-Type': 'application/json',
-                'User-Agent': 'Arrpheus/1.0.0'
+                'User-Agent': userAgent
             },
             body: JSON.stringify({records})
         })
