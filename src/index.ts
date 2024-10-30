@@ -113,15 +113,20 @@ async function pollAirtable() {
     console.log(`all ${messageRequests ? messageRequests.length : 0} messages handled.`)
 
     try {
+        let updatedRecords = [];
         const joinRequestsRecords = await people_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
             maxRecords: 1
         });
 
-        if (joinRequestsRecords.length > 0) {
+        for (const joinRequest of joinRequestsRecords) {
             console.log('Inviting user');
             // invite user
-            await handleJoinRequest(joinRequestsRecords[0]);
+            updatedRecords.push(await handleJoinRequest(joinRequest)['airtableRecord']);
+        }
+        if (updatedRecords.length > 0) {
+            console.log(`Join requests: updating ${updatedRecords.length} records...`);
+            await people_airtable.updateBulk(updatedRecords);
         }
     } catch (error) {
         console.error('Error reading join requests airtable:', error);
@@ -261,18 +266,25 @@ async function handleJoinRequest(joinRequestRecord) {
     console.log(result);
     if (!result.ok) {
         console.error(`Error inviting user ${email} to Slack`);
-        people_airtable.update(joinRequestRecord.id, {
-            [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true,
-            [process.env.AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME]: result.error,
-            [process.env.AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME]: result.error.includes("already_in_team") ? true : false
-        });
+        
+        result['airtableRecord'] = { 
+            id: joinRequestRecord.id, 
+            fields:{
+                [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true,
+                [process.env.AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME]: result.error,
+                [process.env.AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME]: result.error.includes("already_in_team") ? true : false
+            }
+        };
         return result;
     }
     // update Join Requests record
-    people_airtable.update(joinRequestRecord.id, {
-        [process.env.AIRTABLE_JR_INVITED_FIELD_NAME]: true,
-        [process.env.AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME]: generateUUID(),
-    });
+    result['airtableRecord'] = {
+        id: joinRequestRecord.id, 
+        fields: {
+            [process.env.AIRTABLE_JR_INVITED_FIELD_NAME]: true,
+            [process.env.AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME]: generateUUID(),
+        }
+    }
 
     // also log to join requests base
     // actually we're not doing this, see https://hackclub.slack.com/archives/C07MS92E0J3/p1729880392714889?thread_ts=1729878568.963819&cid=C07MS92E0J3
