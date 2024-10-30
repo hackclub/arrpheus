@@ -1,5 +1,5 @@
 import { App } from '@slack/bolt';
-import { WebClient } from '@slack/web-api';
+import { AirtableFetch } from './airtableFetch';
 import AirtablePlus from 'airtable-plus';
 import { inviteSlackUser, upgradeUser } from './undocumentedSlack';
 import http from 'http';
@@ -56,25 +56,25 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN, // App-level token for socket mode
 });
 
-const people_airtable = new AirtablePlus({
+const people_airtable = new AirtableFetch({
     baseID: process.env.AIRTABLE_HS_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_HS_TABLE_NAME!
     });
 
-const message_requests_airtable = new AirtablePlus({
+const message_requests_airtable = new AirtableFetch({
     baseID: process.env.AIRTABLE_HS_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_MR_TABLE_NAME!
     });
 
-const join_requests_base_airtable = new AirtablePlus({
+const join_requests_base_airtable = new AirtableFetch({
     baseID: process.env.AIRTABLE_JRB_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_JRB_TABLE_NAME!
     });
 
-const config_airtable = new AirtablePlus({
+const config_airtable = new AirtableFetch({
     baseID: process.env.AIRTABLE_HS_BASE_ID!,
     apiKey: process.env.AIRTABLE_API_KEY!,
     tableName: process.env.AIRTABLE_CONFIG_TABLE_NAME!
@@ -88,7 +88,7 @@ async function pollAirtable() {
          messageRequests = await message_requests_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME}}), NOT({${process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME}}))`,
             maxRecords: 5,
-            sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}]
+            //sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}] just going to not implement this cursed encoding scheme, it'll only become a problem if the backlog grows and then we have bigger problems anyways
         });
     } catch (error) {
         console.error('Error reading message requests airtable:', error);
@@ -108,7 +108,7 @@ async function pollAirtable() {
     try {
         const joinRequestsRecords = await people_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
-            maxRecords: 1,
+            maxRecords: 1
         });
 
         if (joinRequestsRecords.length > 0) {
@@ -123,7 +123,7 @@ async function pollAirtable() {
     try {
         const highSeasRecords = await people_airtable.read({
             filterByFormula: `AND({${process.env.AIRTABLE_HS_PROMOTION_REQUESTED_FIELD_NAME}}, NOT({${process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME}}))`,
-            maxRecords: 1,
+            maxRecords: 1
         });
 
         if (highSeasRecords.length > 0) {
@@ -290,7 +290,7 @@ app.event('team_join', async ({ event, client }) => {
         return;
     }
     const userRecords = await people_airtable.read({
-        filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`
+        filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`,
     });
     console.log(`Got ${userRecords.length} records`);
     if (userRecords.length === 0) {
@@ -367,8 +367,7 @@ server.on('request', async (req, res) => {
             const userEmail = data.email;
             const userRecord = await people_airtable.read({
                 filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${userEmail}'`,
-                maxRecords: 1,
-                sort: [{field: 'autonumber', direction: 'desc'}]
+                maxRecords: 1
             });
             if (userRecord.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -403,8 +402,7 @@ server.on('request', async (req, res) => {
             const userSlackId = data.slack_id;
             const userRecord = await people_airtable.read({
                 filterByFormula: `{${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${userSlackId}'`,
-                maxRecords: 1,
-                sort: [{field: 'autonumber', direction: 'desc'}]
+                maxRecords: 1
             });
             if (userRecord.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
