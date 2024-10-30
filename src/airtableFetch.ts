@@ -29,8 +29,8 @@ export class AirtableFetch {
             params += `${key}=${paramsObj[key]}&`
         }
 
-        //console.log("Fetching from Airtable:")
-        //console.log(this.url + '?' + params)
+        console.log("Fetching from Airtable:")
+        console.log(this.url + '?' + params)
         const res = await fetch(this.url + '?' + params, {
             headers: {
                 Authorization: `Bearer ${this.apiKey}`,
@@ -44,8 +44,8 @@ export class AirtableFetch {
             throw new Error(`Failed to fetch from Airtable: ${res.status} ${res.statusText} ${body}`)
         }
         const json = await res.json()
-        //console.log("Response JSON:")
-        //console.log(json)
+        console.log("Response JSON:")
+        console.log(json)
         return json.records
     }
 
