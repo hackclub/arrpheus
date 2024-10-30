@@ -8,6 +8,10 @@ if (!process.env["NODE_ENV"] || process.env["NODE_ENV"] !== "production") {
 require('dotenv').config();
 }
 
+// new-style config vars that are actually checked into git (:
+const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07PZNMBPBN" // Currently low-skies and low-skies-help, TODO: add -ships and -bulletin when those get made public
+const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0" // #lounge, #library, #welcone, #scrapbook, #code
+
 // a note on env var naming conventions:
 // the HS/JR/JRB/MR prefixes refer to the purpose of that field.
 // they've gotten a little muddied and were clearer in older versions.
@@ -74,11 +78,11 @@ const join_requests_base_airtable = new AirtableFetch({
     tableName: process.env.AIRTABLE_JRB_TABLE_NAME!
     });
 
-const config_airtable = new AirtableFetch({
-    baseID: process.env.AIRTABLE_HS_BASE_ID!,
-    apiKey: process.env.AIRTABLE_API_KEY!,
-    tableName: process.env.AIRTABLE_CONFIG_TABLE_NAME!
-    });
+// const config_airtable = new AirtableFetch({
+//     baseID: process.env.AIRTABLE_HS_BASE_ID!,
+//     apiKey: process.env.AIRTABLE_API_KEY!,
+//     tableName: process.env.AIRTABLE_CONFIG_TABLE_NAME!
+//     });
 
 
 async function pollAirtable() {
@@ -131,11 +135,7 @@ async function pollAirtable() {
 
         if (highSeasRecords.length > 0) {
             console.log('Promoting user');
-            const configRecords = await config_airtable.read();
-            const configRecord = configRecords[0];
-            const channels = configRecord.fields[process.env.AIRTABLE_CONFIG_PROMOTION_CHANNELS_FIELD_NAME];
-
-            const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME], channels);
+            const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME], CHANNELS_ON_PROMOTION);
             if (result.ok) {
                 await people_airtable.update(highSeasRecords[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
@@ -256,11 +256,7 @@ async function handleJoinRequest(joinRequestRecord) {
     console.log('Inviting user to Slack');
     const email = joinRequestRecord.fields[process.env.AIRTABLE_HS_EMAIL_FIELD_NAME];
 
-    const configRecords = await config_airtable.read();
-    const configRecord = configRecords[0];
-    const channels = configRecord.fields[process.env.AIRTABLE_CONFIG_JOIN_CHANNELS_FIELD_NAME];    
-
-    const result = await inviteSlackUser({email, channels});
+    const result = await inviteSlackUser({email, channels: CHANNELS_ON_JOIN});
     console.log('Result of inviting user to Slack');
     console.log(result);
     if (!result.ok) {
@@ -426,10 +422,8 @@ server.on('request', async (req, res) => {
                 res.end('User not found in Airtable');
                 return;
             }
-            const configRecords = await config_airtable.read();
-            const configRecord = configRecords[0];
-            const channels = configRecord.fields[process.env.AIRTABLE_CONFIG_PROMOTION_CHANNELS_FIELD_NAME];
-            const result = await upgradeUser(app.client, userSlackId, channels);
+
+            const result = await upgradeUser(app.client, userSlackId, CHANNELS_ON_PROMOTION);
             if (result.ok) {
                 await people_airtable.update(userRecord[0].id, {
                     [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
