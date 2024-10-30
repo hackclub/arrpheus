@@ -122,7 +122,10 @@ async function pollAirtable() {
         for (const joinRequest of joinRequestsRecords) {
             console.log('Inviting user');
             // invite user
-            updatedRecords.push(await handleJoinRequest(joinRequest)['airtableRecord']);
+            const result = await handleJoinRequest(joinRequest);
+            console.log('Result of inviting user');
+            console.log(result);
+            updatedRecords.push(result['airtableRecord']);
         }
         if (updatedRecords.length > 0) {
             console.log(`Join requests: updating ${updatedRecords.length} records:`);
