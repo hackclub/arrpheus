@@ -62,4 +62,18 @@ export class AirtableFetch {
         const json = await res.json()
         return json
     }
+
+    async updateBulk(records) {
+        const res = await fetch(this.url, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'Arrpheus/1.0.0'
+            },
+            body: JSON.stringify({records})
+        })
+        const json = await res.json()
+        return json
+    }
 }

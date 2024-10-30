@@ -87,7 +87,7 @@ async function pollAirtable() {
     try {
          messageRequests = await message_requests_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME}}), NOT({${process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME}}))`,
-            maxRecords: 5,
+            maxRecords: 10,
             //sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}] just going to not implement this cursed encoding scheme, it'll only become a problem if the backlog grows and then we have bigger problems anyways
         });
     } catch (error) {
@@ -99,11 +99,14 @@ async function pollAirtable() {
     }
 
     if (messageRequests && messageRequests.length > 0){
+        let updatedRecords = [];
         for (const messageRequest of messageRequests) {
-            await sendMessage(messageRequest);
+            updatedRecords.push(await sendMessage(messageRequest));
         }
+        console.log(`Message requests: updating ${updatedRecords.length} records...`);
+        await message_requests_airtable.updateBulk(updatedRecords);
     }
-    console.log(`all ${messageRequests ? 0 : messageRequests.length} messages handled.`)
+    console.log(`all ${messageRequests ? messageRequests.length : 0} messages handled.`)
 
     try {
         const joinRequestsRecords = await people_airtable.read({
@@ -153,29 +156,35 @@ async function sendMessage(messageRequest) {
     const requesterId = messageRequest.fields[process.env.AIRTABLE_MR_REQUESTER_FIELD_NAME];
     if (!requesterId) {
         console.error(`Error: no requester id found for message request ${messageRequest.id}`);
-        await message_requests_airtable.update(messageRequest.id, {
-            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
-            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No requester identifier found. Make sure you\'re filling out all needed fields.'
-        });
-        return;
+        return {
+            id: messageRequest.id,
+            fields: {
+                [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+                [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No requester identifier found. Make sure you\'re filling out all needed fields.'
+            }
+        }
     }
     const targetSlackId = messageRequest.fields[process.env.AIRTABLE_MR_TARGET_FIELD_NAME];
     if (!targetSlackId) {
         console.error(`Error: no target slack id found for message request ${messageRequest.id}`);
-        await message_requests_airtable.update(messageRequest.id, {
-            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
-            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No target slack id found. Make sure you\'re filling out all needed fields.'
-        });
-        return;
+        return {
+            id: messageRequest.id,
+            fields: {
+                [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+                [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No target Slack ID found. Make sure you\'re filling out all needed fields.'
+            }
+        }
     }
     const msgText = messageRequest.fields[process.env.AIRTABLE_MR_MSG_TEXT_FIELD_NAME];
     if (!msgText) {
         console.error(`Error: no message text found for message request ${messageRequest.id}`);
-        await message_requests_airtable.update(messageRequest.id, {
-            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
-            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No message text found. Make sure you\'re filling out all needed fields.'
-        });
-        return;
+        return {
+            id: messageRequest.id,
+            fields: {
+                [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+                [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: 'No message text found. Make sure you\'re filling out all needed fields.'
+            }
+        }
     }
     const msgBlocksStr = messageRequest.fields[process.env.AIRTABLE_MR_MSG_BLOCKS_FIELD_NAME];
     let msgBlocks = undefined;
@@ -185,11 +194,13 @@ async function sendMessage(messageRequest) {
             console.log(`Parsed message blocks from message request ${messageRequest.id}`);
         } catch (error) {
             console.error(`Error parsing message blocks for message request ${messageRequest.id}: ${error}`);
-            await message_requests_airtable.update(messageRequest.id, {
-                [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
-                [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: `Error parsing message blocks: ${error}`
-            });
-            return;
+            return {
+                id: messageRequest.id, 
+                fields: {
+                    [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+                    [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: `Error parsing message blocks: ${error}`
+                }
+            };
         }
     }
     let unfurlLinks = !!messageRequest.fields[process.env.AIRTABLE_MR_UNFURL_LINKS_FIELD_NAME]; // cast to boolean
@@ -212,15 +223,21 @@ async function sendMessage(messageRequest) {
     }
     if (errorMsg) {
         console.error(`Error sending message to ${targetSlackId}: ${errorMsg}`);
-        await message_requests_airtable.update(messageRequest.id, {
-            [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
-            [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: errorMsg
-        });
+        return {
+            id: messageRequest.id,
+            fields: {
+                [process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME]: true,
+                [process.env.AIRTABLE_MR_FAILURE_REASON_FIELD_NAME]: errorMsg
+            }
+        }
     } else {
         console.log('... message sent successfully.');
-        await message_requests_airtable.update(messageRequest.id, {
-            [process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME]: true
-        });
+        return {
+            id: messageRequest.id,
+            fields: {
+                [process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME]: true
+            }
+        }
     }
     console.log("message handled.")
 }
