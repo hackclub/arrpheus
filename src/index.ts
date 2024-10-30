@@ -125,7 +125,8 @@ async function pollAirtable() {
             updatedRecords.push(await handleJoinRequest(joinRequest)['airtableRecord']);
         }
         if (updatedRecords.length > 0) {
-            console.log(`Join requests: updating ${updatedRecords.length} records...`);
+            console.log(`Join requests: updating ${updatedRecords.length} records:`);
+            console.log(updatedRecords);
             await people_airtable.updateBulk(updatedRecords);
         }
     } catch (error) {
