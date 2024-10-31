@@ -274,14 +274,41 @@ async function handleJoinRequest(joinRequestRecord) {
     console.log(result);
     if (!result.ok) {
         console.error(`Error inviting user ${email} to Slack`);
+
+        const emailIsDupe = result.error.includes("already_in_team");
+        let dupedUserId = undefined;
+        if (emailIsDupe) {
+            console.log(`Attempting to deduplicate user ${email}`);
+            try {
+                const searchResponse = await app.client.users.lookupByEmail({ email });
+                if (searchResponse.ok) {
+                    dupedUserId = searchResponse.user?.id;
+                    console.log(`Deduplicated user ${email} to ${dupedUserId}`);
+                } else {
+                    throw new Error(`Error looking up user by email ${email}: ${searchResponse.error}`);
+                }
+            } catch (error) {
+                console.error(`Error looking up user by email ${email}: ${error}`);
+                await app.client.chat.postMessage({
+                    channel: process.env.SLACK_LOGGING_CHANNEL,
+                    text: `ERROR: Error looking duplicate up user by email ${email}: ${error}`
+                });
+            }
+        }
+
+        let fields = {
+            [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true,
+            [process.env.AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME]: result.error,
+            [process.env.AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME]: emailIsDupe,
+        }
+
+        if (dupedUserId) {
+            fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME] = dupedUserId;
+        }
         
         result['airtableRecord'] = { 
             id: joinRequestRecord.id, 
-            fields:{
-                [process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME]: true,
-                [process.env.AIRTABLE_JR_INVITE_FAILURE_REASON_FIELD_NAME]: result.error,
-                [process.env.AIRTABLE_JR_DUPE_EMAIL_FIELD_NAME]: result.error.includes("already_in_team") ? true : false
-            }
+            fields,
         };
         return result;
     }
