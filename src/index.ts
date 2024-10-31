@@ -150,14 +150,22 @@ async function pollAirtable() {
             console.log('Promoting user');
             const result = await upgradeUser(app.client, highSeasRecords[0].fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME], CHANNELS_ON_PROMOTION);
             if (result.ok) {
-                await people_airtable.update(highSeasRecords[0].id, {
-                    [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
-                }, 'Arrpheus.poll.promo/1.0.0');
+                try {
+                    await people_airtable.update(highSeasRecords[0].id, {
+                        [process.env.AIRTABLE_HS_PROMOTED_FIELD_NAME]: true
+                    }, 'Arrpheus.poll.promo/1.0.0');
+                } catch (error) {
+                    console.error(`Error updating airtable after successful promotion: ${error}`);
+                }
             } else {
-                await people_airtable.update(highSeasRecords[0].id, {
-                    [process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME]: true,
-                    [process.env.AIRTABLE_HS_PROMOTE_FAILURE_REASON_FIELD_NAME]: result.error
-                }, 'Arrpheus.poll.promo/1.0.0');
+                try {
+                    await people_airtable.update(highSeasRecords[0].id, {
+                        [process.env.AIRTABLE_HS_PROMOTE_FAILED_FIELD_NAME]: true,
+                        [process.env.AIRTABLE_HS_PROMOTE_FAILURE_REASON_FIELD_NAME]: result.error
+                    }, 'Arrpheus.poll.promo/1.0.0');
+                } catch (error) {
+                    console.error(`Error updating airtable after failed promotion: ${error}`);
+                }
             }
         }
     } catch (error) {
@@ -349,9 +357,23 @@ app.event('team_join', async ({ event, client }) => {
         });
         return;
     }
-    const userRecords = await people_airtable.read({
-        filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`,
-    }, 'Arrpheus.team_join/1.0.0');
+    let userRecords = [];
+    try {
+        userRecords = await people_airtable.read({
+            filterByFormula: `{${process.env.AIRTABLE_HS_EMAIL_FIELD_NAME}} = '${email}'`,
+        }, 'Arrpheus.team_join/1.0.0');
+    } catch (error) {
+        console.error(`Error reading user records for user <@${event.user.id}> with email ${email}: ${error}. attempting to fall back to jrb...`);
+        fallbackUserLog(client, email, event);
+        await client.chat.postMessage({
+            channel: event.user.id,
+            text: "Ahoy, matey! Welcome to High Seas! We be under heavy load at the moment, watch this space for a link to continue to arrive in the next few hours! If you don't get something soon, make a post in <#C07PZNMBPBN>.",
+            username: 'Arrpheus',
+            icon_url: 'https://noras-secret-cdn.hackclub.dev/yeah_of_course_river_np.png'}
+        );
+        console.log(`${event.user.id} has been notified of heavy load (on read).`);
+        return;
+    }
     console.log(`Got ${userRecords.length} records`);
     if (userRecords.length === 0) {
         const errorString = `ERROR: When welcoming user, no airtable record found for user <@${event.user.id}> with email ${email}`;
@@ -387,11 +409,24 @@ app.event('team_join', async ({ event, client }) => {
             });
         }
     }
-    await people_airtable.update(userRecord.id, {
-        [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
-        [process.env.AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME]: true,
-        [process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME]: true // those square brackets are ES6 computed property names
-    }, 'Arrpheus.team_join/1.0.0');
+    try {
+        await people_airtable.update(userRecord.id, {
+            [process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME]: event.user.id,
+            [process.env.AIRTABLE_HS_USER_REFERRED_TO_HARBOR_FIELD_NAME]: true,
+            [process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME]: true // those square brackets are ES6 computed property names
+        }, 'Arrpheus.team_join/1.0.0');
+    } catch (error) {
+        console.error(`Error updating user record with slack id ${event.user.id}: ${error}. attempting to fall back to jrb...`);
+        fallbackUserLog(client, email, event);
+        await client.chat.postMessage({
+            channel: event.user.id,
+            text: "Ahoy, matey! Welcome to High Seas! We be under heavy load at the moment, watch this space for a link to continue to arrive in the next few hours! If you don't get something soon, make a post in <#C07PZNMBPBN>.",
+            username: 'Arrpheus',
+            icon_url: 'https://noras-secret-cdn.hackclub.dev/yeah_of_course_river_np.png'}
+        );
+        console.log(`${event.user.id} has been notified of heavy load (on write).`);
+        return;
+    }
     console.log(`Updated user record with slack id ${event.user.id}`);
     // send welcome message
     await client.chat.postMessage({
@@ -403,6 +438,29 @@ app.event('team_join', async ({ event, client }) => {
     });
 
 });
+
+async function fallbackUserLog(client, email, event){
+    try {
+        const jrbRecord = await join_requests_base_airtable.read({
+            filterByFormula: `{${process.env.AIRTABLE_JRB_EMAIL_FIELD_NAME}} = '${email}'`,
+            maxRecords: 1
+        }, 'Arrpheus.team_join/1.0.0');
+        if (jrbRecord.length === 0) {
+            console.error(`Error: no join request base record found for user <@${event.user.id}> with email ${email}`);
+            await client.chat.postMessage({
+                channel: process.env.SLACK_LOGGING_CHANNEL,
+                text: `ERROR: No join request base record found for user <@${event.user.id}> with email ${email}`
+            });
+            return;
+        }
+        await join_requests_base_airtable.update(jrbRecord[0].id, {
+            "Slack ID": event.user.id,
+            "arrpheus_fell_back": true
+        }, 'Arrpheus.team_join/1.0.0');
+    } catch (error) {
+        console.error(`Error falling back to join requests base: ${error}`);
+    }
+}
 
 const server = http.createServer();
 server.on('request', async (req, res) => {

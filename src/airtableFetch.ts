@@ -62,6 +62,10 @@ export class AirtableFetch {
             },
             body: JSON.stringify({fields})
         })
+        if (!res.ok) {
+            const body = await res.text()
+            throw new Error(`Failed to update Airtable record: ${res.status} ${res.statusText} ${body}`)
+        }
         const json = await res.json()
         return json
     }
