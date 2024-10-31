@@ -11,7 +11,10 @@ require('dotenv').config();
 // new-style config vars that are actually checked into git (:
 const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07TNAZGMHS,C07UA18MXBJ,C07PZNMBPBN" // #high-seas, #high-seas-bulletin, #high-seas-ships, #high-seas-help
 const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0" // #lounge, #library, #welcone, #scrapbook, #code
-const POLLING_RATE_MS = 7000;
+const NORMAL_POLLING_RATE_MS = 7000;
+const FALLBACK_POLLING_RATE_MS = 30000;
+let currentPollingRate = NORMAL_POLLING_RATE_MS;
+let returnToNormalCountdown = 0;
 
 // a note on env var naming conventions:
 // the HS/JR/JRB/MR prefixes refer to the purpose of that field.
@@ -89,6 +92,7 @@ const join_requests_base_airtable = new AirtableFetch({
 async function pollAirtable() {
     console.log('Polling airtable');
     let messageRequests = undefined;
+    let hadError = false;
     try {
          messageRequests = await message_requests_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME}}), NOT({${process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME}}))`,
@@ -97,11 +101,27 @@ async function pollAirtable() {
             //sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}] just going to not implement this cursed encoding scheme, it'll only become a problem if the backlog grows and then we have bigger problems anyways
         }, 'Arrpheus.poll.msg/1.0.0');
     } catch (error) {
+        hadError = true;
         console.error('Error reading message requests airtable:', error);
         app.client.chat.postMessage({
             channel: process.env.SLACK_LOGGING_CHANNEL,
             text: `ERROR: Error reading message requests airtable: ${error}`
         });
+        if (error.message.includes("50")){
+            if (currentPollingRate === NORMAL_POLLING_RATE_MS) {
+                console.log(`Error 50x, falling back to slower polling rate:`);
+                currentPollingRate = FALLBACK_POLLING_RATE_MS;
+                await app.client.chat.postMessage({
+                    channel: process.env.SLACK_LOGGING_CHANNEL,
+                    text: `INFO: Falling back to slower polling rate: ${currentPollingRate}ms <@U05PYFCJXV0>`
+                });
+            }
+            returnToNormalCountdown = 3;
+        }
+    }
+    if (!hadError && returnToNormalCountdown > 0) {
+        console.log(`Error 50x resolved, returning to normal polling rate in ${returnToNormalCountdown} polls.`);
+        returnToNormalCountdown--;
     }
 
     if (messageRequests && messageRequests.length > 0){
@@ -171,6 +191,16 @@ async function pollAirtable() {
     } catch (error) {
         console.error('Error reading high seas airtable:', error);
     }
+
+    if (currentPollingRate === FALLBACK_POLLING_RATE_MS && returnToNormalCountdown === 0) {
+        console.log(`Returning to normal polling rate: ${NORMAL_POLLING_RATE_MS}ms`);
+        currentPollingRate = NORMAL_POLLING_RATE_MS;
+        await app.client.chat.postMessage({
+            channel: process.env.SLACK_LOGGING_CHANNEL,
+            text: `INFO: Returning to normal polling rate: ${currentPollingRate}ms <@U05PYFCJXV0>`
+        });
+    }
+    setTimeout(pollAirtable, currentPollingRate);
 }
 
 async function sendMessage(messageRequest) {
@@ -563,5 +593,5 @@ server.on('request', async (req, res) => {
     server.listen(process.env.PORT);
     console.log(`Server listening on port ${process.env.PORT}`);
     // poll airtable every 30 seconds
-    setInterval(pollAirtable, POLLING_RATE_MS);
+    setTimeout(pollAirtable, currentPollingRate);
 })();
