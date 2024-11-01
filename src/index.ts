@@ -539,7 +539,7 @@ app.command('/dm-magic-link', async ({ ack, body, client }) => {
     let possibleUsers = [];
     try {
         possibleUsers = await people_airtable.read({
-            filterByFormula: `AND({${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${mentionedSlackId}', {${process.env.AIRTABLE_HS_INVITED_FIELD_NAME}})`,
+            filterByFormula: `AND({${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${mentionedSlackId}', {${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}})`,
             maxRecords: 1
         }, 'Arrpheus.dm-magic-link/1.0.0');
     } catch (error) {
