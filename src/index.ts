@@ -492,6 +492,83 @@ async function fallbackUserLog(client, email, event){
     }
 }
 
+app.command('/dm-magic-link', async ({ ack, body, client }) => {
+    // look up the magic link in airtable and dm the pinged user
+    await ack();
+    console.log(`Got command /dm-magic-link from ${body.user_id} with text ${body.text}`);
+    // users allowed to use this command are workspace admins/owners, members of group S07U41270QN, and U05PYFCJXV0
+    // verify that user is allowed to use this command
+    let user_allowed = false;
+    try {
+        const result = await client.usergroups.users.list({ usergroup: 'S07U41270QN' });
+        if (result.ok) {
+            user_allowed = result.users.includes(body.user_id) || body.user_id === 'U05PYFCJXV0';
+        }
+    } catch (error) {
+        console.error(`Error checking if user is allowed to use command: ${error}`);
+    }
+    // check if user is workspace admin
+    try {
+        const result = await client.users.info({ user: body.user_id });
+        if (result.ok) {
+            user_allowed = user_allowed || result.user.is_admin || result.user.is_owner;
+        }
+    } catch (error) {
+        console.error(`Error checking if user is workspace admin: ${error}`);
+    }
+
+    if (!user_allowed) {
+        await client.chat.postEphemeral({
+            channel: body.channel_id,
+            user: body.user_id,
+            text: "You are not allowed to use this command."
+        });
+        return;
+    }
+
+    let mentionedSlackId = body.text.match(/<@([^>]+)\|.*>/) ? body.text.match(/<@([^>]+)\|.*>/)[1] : undefined;
+    if (!mentionedSlackId) {
+        await client.chat.postEphemeral({
+            channel: body.channel_id,
+            user: body.user_id,
+            text: "You need to mention a user to send them a magic link."
+        });
+        return;
+    }
+    console.log(`Mentioned slack id: ${mentionedSlackId}`);
+    let possibleUsers = [];
+    try {
+        possibleUsers = await people_airtable.read({
+            filterByFormula: `AND({${process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME}} = '${mentionedSlackId}', {${process.env.AIRTABLE_HS_HAS_SIGNED_IN_FIELD_NAME}})`,
+            maxRecords: 1
+        }, 'Arrpheus.dm-magic-link/1.0.0');
+    } catch (error) {
+        console.error(`Error looking up user by slack id ${mentionedSlackId}: ${error}`);
+    }
+    if (possibleUsers.length === 0) {
+        await client.chat.postEphemeral({
+            channel: body.channel_id,
+            user: body.user_id,
+            text: "No user found with that Slack ID who has a magic link. You should ping <@U05PYFCJXV0>, this user probably has a deeper issue.s"
+        });
+        return;
+    }
+    let userRecord = possibleUsers[0];
+    let magicLink = userRecord.fields[process.env.AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME];
+    await client.chat.postMessage({
+        channel: mentionedSlackId,
+        text: `${magicLink}`,
+    });
+
+    await client.chat.postEphemeral({
+        channel: body.channel_id,
+        user: body.user_id,
+        text: `Sent magic link to <@${mentionedSlackId}>.`
+    });
+});
+
+
+
 const server = http.createServer();
 server.on('request', async (req, res) => {
     console.log(`Got request: ${req.method} ${req.url}`);
