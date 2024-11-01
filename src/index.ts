@@ -549,7 +549,7 @@ app.command('/dm-magic-link', async ({ ack, body, client }) => {
         await client.chat.postEphemeral({
             channel: body.channel_id,
             user: body.user_id,
-            text: "No user found with that Slack ID who has a magic link. You should ping <@U05PYFCJXV0>, this user probably has a deeper issue.s"
+            text: "No user found with that Slack ID who has a magic link. You should ping <@U05PYFCJXV0>, this user probably has a deeper issue."
         });
         return;
     }
