@@ -1,7 +1,7 @@
 import { App } from '@slack/bolt';
 import { AirtableFetch } from './airtableFetch';
 import AirtablePlus from 'airtable-plus';
-import { inviteSlackUser, upgradeUser } from './undocumentedSlack';
+import { inviteSlackUser, upgradeUser, inviteMCGToChannel } from './undocumentedSlack';
 import http from 'http';
 
 if (!process.env["NODE_ENV"] || process.env["NODE_ENV"] !== "production") {
@@ -350,10 +350,7 @@ async function handleJoinRequest(joinRequestRecord) {
                 console.log(`User ${dupedUserId} is a multi-channel guest, inviting them to new channels...`);
                 for(const channel of CHANNELS_ON_JOIN.split(',')) {
                     try {
-                        await app.client.conversations.invite({
-                            channel,
-                            users: dupedUserId
-                        });
+                        await inviteMCGToChannel(app.client, dupedUserId, channel);
                         console.log(`Invited user ${dupedUserId} to channel ${channel}`);
                     } catch (error) {
                         console.error(`Error inviting duped MCG user ${dupedUserId} to channel ${channel}: ${error}`);

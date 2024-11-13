@@ -141,3 +141,37 @@ export async function upgradeUser(client, user, channels) {
   console.log(`User ${user} upgraded in ${Date.now() - startPerf}ms`)
   return j
 }
+
+export async function inviteMCGToChannel(client, user, channel) {
+  const userProfile = await client.users.info({ user })
+  const { team_id } = userProfile.user
+
+  const cookieValue = `d=${process.env.SLACK_COOKIE}`
+
+  // Create a new Headers object
+  const headers = new Headers()
+
+  // Add the cookie to the headers
+  headers.append('Cookie', cookieValue)
+  headers.append('Content-Type', 'application/json')
+  headers.append('Authorization', `Bearer ${process.env.SLACK_BROWSER_TOKEN}`)
+  const form = JSON.stringify({
+    token: process.env.SLACK_BROWSER_TOKEN,
+    users: user,
+    channel,
+    invite_all: false,
+    force: true,
+  })
+  const r = await fetch(
+    `https://slack.com/api/conversations.invite?slack_route=${team_id}`,
+    {
+      headers,
+      method: 'POST',
+      body: form,
+    }
+  )
+  const j = await r.json()
+  console.log('Got MCG invite response:')
+  console.log(JSON.stringify(j, null, 2))
+  return j
+}
