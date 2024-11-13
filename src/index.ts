@@ -9,6 +9,7 @@ require('dotenv').config();
 }
 
 // new-style config vars that are actually checked into git (:
+const AT_PEOPLE_IS_MCG_FIELD_NAME = "preexisting_multi_channel_guest";
 const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07TNAZGMHS,C07UA18MXBJ,C07PZNMBPBN" // #high-seas, #high-seas-bulletin, #high-seas-ships, #high-seas-help
 const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0" // #lounge, #library, #welcone, #scrapbook, #code
 const NORMAL_POLLING_RATE_MS = 7000;
@@ -315,6 +316,7 @@ async function handleJoinRequest(joinRequestRecord) {
 
         const emailIsDupe = result.error.includes("already_in_team");
         let dupedUserId = undefined;
+        let userIsMCG = false;
         if (emailIsDupe) {
             console.log(`Attempting to deduplicate user ${email}`);
             try {
@@ -322,6 +324,8 @@ async function handleJoinRequest(joinRequestRecord) {
                 if (searchResponse.ok) {
                     dupedUserId = searchResponse.user?.id;
                     console.log(`Deduplicated user ${email} to ${dupedUserId}`);
+                    // check if user is a multi-channel guest
+                    userIsMCG = searchResponse.user?.is_restricted;
                 } else {
                     throw new Error(`Error looking up user by email ${email}: ${searchResponse.error}`);
                 }
@@ -342,6 +346,28 @@ async function handleJoinRequest(joinRequestRecord) {
 
         if (dupedUserId) {
             fields[process.env.AIRTABLE_HS_SLACK_ID_FIELD_NAME] = dupedUserId;
+            if(userIsMCG) {
+                console.log(`User ${dupedUserId} is a multi-channel guest, inviting them to new channels...`);
+                for(const channel of CHANNELS_ON_JOIN.split(',')) {
+                    try {
+                        await app.client.conversations.invite({
+                            channel,
+                            users: dupedUserId
+                        });
+                        console.log(`Invited user ${dupedUserId} to channel ${channel}`);
+                    } catch (error) {
+                        console.error(`Error inviting duped MCG user ${dupedUserId} to channel ${channel}: ${error}`);
+                        await app.client.chat.postMessage({
+                            channel: process.env.SLACK_LOGGING_CHANNEL,
+                            text: `ERROR: Error inviting duped MCG user ${dupedUserId} to channel ${channel}: ${error}`
+                        });
+                    }
+                }
+
+                fields[process.env.AIRTABLE_JR_AUTH_TOKEN_FIELD_NAME] = generateUUID();
+                fields[AT_PEOPLE_IS_MCG_FIELD_NAME] = true;
+                // we don't DM them from here. for ease of flow, an airtable automation will handle that with a message request.
+            }
         }
         
         result['airtableRecord'] = { 
