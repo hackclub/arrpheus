@@ -12,7 +12,7 @@ export class AirtableFetch {
         this.url = this.urlBase + baseID + '/' + tableName;
     }
 
-    async read(args: {filterByFormula?, maxRecords?, view?} | undefined=undefined, userAgent = 'Arrpheus/1.0.0') {
+    async read(args: {filterByFormula?, maxRecords?, view?, sortString?} | undefined=undefined, userAgent = 'Arrpheus/1.0.0') {
         let paramsObj = {}
         if (args && args.filterByFormula) {
             //console.log(`encoding formula: ${args.filterByFormula}`)
@@ -30,6 +30,10 @@ export class AirtableFetch {
         let params = "";
         for (const key in paramsObj) {
             params += `${key}=${paramsObj[key]}&`
+        }
+
+        if (args && args.sortString) {
+            params += args.sortString
         }
 
         console.log("Fetching from Airtable:")

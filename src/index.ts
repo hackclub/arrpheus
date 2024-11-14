@@ -140,7 +140,7 @@ async function pollAirtable() {
         const joinRequestsRecords = await people_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
             maxRecords: 10,
-            view: 'Grid+view'
+            sortString: "sort%5B0%5D%5Bfield%5D=autonumber&sort%5B0%5D%5Bdirection%5D=asc" // sort by autonumber, ascending
         }, 'Arrpheus.poll.jr/1.0.0');
 
         for (const joinRequest of joinRequestsRecords) {
