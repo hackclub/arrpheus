@@ -98,7 +98,7 @@ async function pollAirtable() {
          messageRequests = await message_requests_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_MR_SEND_SUCCESS_FIELD_NAME}}), NOT({${process.env.AIRTABLE_MR_SEND_FAILURE_FIELD_NAME}}))`,
             maxRecords: 10,
-            view: 'Grid+view'
+            sortString: "sort%5B0%5D%5Bfield%5D=autonumber&sort%5B0%5D%5Bdirection%5D=asc" // sort by autonumber, ascending
             //sort: [{field: process.env.AIRTABLE_MR_AUTONUMBER_FIELD_NAME, direction: 'asc'}] just going to not implement this cursed encoding scheme, it'll only become a problem if the backlog grows and then we have bigger problems anyways
         }, 'Arrpheus.poll.msg/1.0.0');
     } catch (error) {
@@ -140,7 +140,7 @@ async function pollAirtable() {
         const joinRequestsRecords = await people_airtable.read({
             filterByFormula: `AND(NOT({${process.env.AIRTABLE_JR_INVITED_FIELD_NAME}}), NOT({${process.env.AIRTABLE_JR_UNINVITABLE_FIELD_NAME}}), {${process.env.AIRTABLE_JR_INVITE_REQUESTED_FIELD_NAME}})`,
             maxRecords: 10,
-            sortString: "sort%5B0%5D%5Bfield%5D=autonumber&sort%5B0%5D%5Bdirection%5D=asc" // sort by autonumber, ascending
+            view: 'Grid+view'
         }, 'Arrpheus.poll.jr/1.0.0');
 
         for (const joinRequest of joinRequestsRecords) {
