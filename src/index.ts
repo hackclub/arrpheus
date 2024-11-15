@@ -489,6 +489,12 @@ app.event('team_join', async ({ event, client }) => {
         username: 'Arrpheus',
         icon_url: 'https://noras-secret-cdn.hackclub.dev/yeah_of_course_river_np.png',
     });
+    // also send directly to user (not into slackbot)
+    await client.chat.postMessage({
+        channel: event.user.id,
+        text: userRecord.fields[process.env.AIRTABLE_JR_AUTH_MESSAGE_FIELD_NAME],
+        blocks: msgBlocks ? msgBlocks : undefined
+    });
 
 });
 
