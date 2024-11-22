@@ -70,8 +70,13 @@ export class AirtableFetch {
             const body = await res.text()
             throw new Error(`Failed to update Airtable record: ${res.status} ${res.statusText} ${body}`)
         }
-        const json = await res.json()
-        return json
+        try{
+            const json = await res.json()
+            return json
+        } catch (e) {
+            console.log(e)
+            return {error: e, ok: false}
+        }
     }
 
     async updateBulk(records, userAgent = 'Arrpheus/1.0.0') {
@@ -84,7 +89,12 @@ export class AirtableFetch {
             },
             body: JSON.stringify({records})
         })
-        const json = await res.json()
-        return json
+        try{
+            const json = await res.json()
+            return json
+        } catch (e) {
+            console.log(e)
+            return {error: e, ok: false}
+        }
     }
 }
