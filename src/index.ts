@@ -10,8 +10,8 @@ require('dotenv').config();
 
 // new-style config vars that are actually checked into git (:
 const AT_PEOPLE_IS_MCG_FIELD_NAME = "preexisting_multi_channel_guest";
-const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07TNAZGMHS,C07UA18MXBJ,C07PZNMBPBN" // #high-seas, #high-seas-bulletin, #high-seas-ships, #high-seas-help
-const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0,C05B6DBN802,C016DEDUL87" // #lounge, #library, #welcone, #scrapbook, #code, #happenings, #cdn
+const CHANNELS_ON_JOIN = "C07PZMBUNDS,C07TNAZGMHS,C07UA18MXBJ,C07PZNMBPBN,C016DEDUL87" // #high-seas, #high-seas-bulletin, #high-seas-ships, #high-seas-help, #cdn
+const CHANNELS_ON_PROMOTION = "C0266FRGV,C078Q8PBD4G,C75M7C0SY,C01504DCLVD,C0EA9S0A0,C05B6DBN802" // #lounge, #library, #welcone, #scrapbook, #code, #happenings
 const NORMAL_POLLING_RATE_MS = 7000;
 const FALLBACK_POLLING_RATE_MS = 30000;
 let currentPollingRate = NORMAL_POLLING_RATE_MS;
